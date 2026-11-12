@@ -64,7 +64,7 @@ class DeploymentService {
    */
   async executeDeployment(deploymentId) {
     let deployment;
-    const buildDir = path.resolve(__dirname, '../../temp', `cloudops-${deploymentId}`);
+    const buildDir = getBuildDir(`cloudops-${deploymentId}`);
 
     try {
       deployment = await Deployment.findById(deploymentId);

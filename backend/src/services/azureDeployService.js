@@ -12,8 +12,9 @@ const { v4: uuidv4 } = require('uuid');
 const Deployment = require('../models/Deployment');
 const { maskSecrets } = require('../utils/logSanitizer');
 const { pushDeploymentLog } = require('../utils/deploymentPersistence');
+const { getBuildDir } = require('../utils/pathResolver');
 
-const TEMP_ROOT = path.resolve(__dirname, '../../temp/azure');
+const TEMP_ROOT = getBuildDir('azure');
 const DEFAULT_CONTAINER_PORT = 3000;
 
 // Azure settings — read from env at call time so .env is loaded first
