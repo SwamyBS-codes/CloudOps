@@ -15,10 +15,10 @@ const TerminalStream: React.FC<Props> = ({ logs }) => {
 
   return (
     <div className="terminal-shell font-jetbrains text-sm" style={{ maxHeight: 320, overflow: 'auto' }} ref={ref}>
-      <div className="text-xs text-white/60 mb-2">Live logs</div>
+      <div className="text-xs text-muted-foreground mb-2">Live logs</div>
       <div>
         {logs.map((ln, idx) => (
-          <div key={idx} className="terminal-line text-[13px] text-white/90 leading-[1.35]">{ln}</div>
+          <div key={idx} className="terminal-line text-[13px] text-foreground leading-[1.35]">{ln}</div>
         ))}
       </div>
     </div>

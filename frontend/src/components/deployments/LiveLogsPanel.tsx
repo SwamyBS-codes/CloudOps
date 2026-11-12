@@ -41,13 +41,13 @@ const LiveLogsPanel: React.FC<LiveLogsPanelProps> = ({
   const getLogColor = (level: string) => {
     switch (level) {
       case 'success':
-        return 'text-emerald-400';
+        return 'text-success';
       case 'error':
-        return 'text-red-400';
+        return 'text-destructive';
       case 'warning':
-        return 'text-amber-400';
+        return 'text-warning';
       default:
-        return 'text-cyan-400';
+        return 'text-primary';
     }
   };
 
@@ -68,22 +68,22 @@ const LiveLogsPanel: React.FC<LiveLogsPanelProps> = ({
     <motion.div
       initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
-      className="bg-slate-900 border border-slate-700/50 rounded-lg lg:rounded-xl overflow-hidden flex flex-col h-full max-h-[600px]"
+      className="bg-secondary border border-border rounded-lg lg:rounded-xl overflow-hidden flex flex-col h-full max-h-[600px]"
     >
       {/* Header */}
-      <div className="bg-slate-800/50 border-b border-slate-700/50 px-4 py-3 flex items-center justify-between">
+      <div className="bg-secondary border-b border-border px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="relative">
-            <div className="w-2 h-2 bg-cyan-500 rounded-full"></div>
+            <div className="w-2 h-2 bg-primary rounded-full"></div>
             <motion.div
-              className="absolute inset-0 w-2 h-2 bg-cyan-500 rounded-full"
+              className="absolute inset-0 w-2 h-2 bg-primary rounded-full"
               animate={{ opacity: [0, 1, 0] }}
               transition={{ duration: 2, repeat: Infinity }}
             />
           </div>
           <div>
-            <h3 className="text-sm font-semibold text-white">Live Logs</h3>
-            <p className="text-xs text-slate-400">
+            <h3 className="text-sm font-semibold text-foreground">Live Logs</h3>
+            <p className="text-xs text-muted-foreground">
               {logs.length} {logs.length === 1 ? 'entry' : 'entries'}
             </p>
           </div>
@@ -93,8 +93,8 @@ const LiveLogsPanel: React.FC<LiveLogsPanelProps> = ({
         <div className="flex items-center gap-2">
           <button
             onClick={() => setAutoScroll(!autoScroll)}
-            className={`p-1.5 rounded hover:bg-slate-700/50 transition-colors ${
-              autoScroll ? 'text-cyan-400' : 'text-slate-500'
+            className={`p-1.5 rounded hover:bg-secondary transition-colors ${
+              autoScroll ? 'text-primary' : 'text-muted-foreground'
             }`}
             title={autoScroll ? 'Auto-scroll enabled' : 'Auto-scroll disabled'}
           >
@@ -116,7 +116,7 @@ const LiveLogsPanel: React.FC<LiveLogsPanelProps> = ({
           {onFullScreen && (
             <button
               onClick={onFullScreen}
-              className="p-1.5 rounded hover:bg-slate-700/50 transition-colors text-slate-400 hover:text-white"
+              className="p-1.5 rounded hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground"
               title="Full screen"
             >
               <Maximize2 className="w-4 h-4" />
@@ -126,7 +126,7 @@ const LiveLogsPanel: React.FC<LiveLogsPanelProps> = ({
           {onClear && (
             <button
               onClick={onClear}
-              className="p-1.5 rounded hover:bg-slate-700/50 transition-colors text-slate-400 hover:text-white"
+              className="p-1.5 rounded hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground"
               title="Clear logs"
             >
               <Trash2 className="w-4 h-4" />
@@ -138,7 +138,7 @@ const LiveLogsPanel: React.FC<LiveLogsPanelProps> = ({
       {/* Logs Container */}
       <div
         ref={scrollRef}
-        className="flex-1 overflow-y-auto bg-slate-900/50 font-mono text-xs"
+        className="flex-1 overflow-y-auto bg-secondary font-mono text-xs"
         style={{
           backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(15, 23, 42, 0.5) 2px, rgba(15, 23, 42, 0.5) 4px)',
         }}
@@ -150,7 +150,7 @@ const LiveLogsPanel: React.FC<LiveLogsPanelProps> = ({
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="text-slate-500 text-center py-8"
+                className="text-muted-foreground text-center py-8"
               >
                 <p>Waiting for logs...</p>
                 {isLoading && (
@@ -160,9 +160,9 @@ const LiveLogsPanel: React.FC<LiveLogsPanelProps> = ({
                     transition={{ duration: 2, repeat: Infinity }}
                   >
                     <div className="flex gap-1">
-                      <div className="w-1 h-1 bg-cyan-500 rounded-full"></div>
-                      <div className="w-1 h-1 bg-cyan-500 rounded-full"></div>
-                      <div className="w-1 h-1 bg-cyan-500 rounded-full"></div>
+                      <div className="w-1 h-1 bg-primary rounded-full"></div>
+                      <div className="w-1 h-1 bg-primary rounded-full"></div>
+                      <div className="w-1 h-1 bg-primary rounded-full"></div>
                     </div>
                   </motion.div>
                 )}
@@ -175,10 +175,10 @@ const LiveLogsPanel: React.FC<LiveLogsPanelProps> = ({
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -10 }}
                   transition={{ duration: 0.2 }}
-                  className="group flex items-start gap-2 hover:bg-slate-800/30 px-2 py-1 rounded transition-colors"
+                  className="group flex items-start gap-2 hover:bg-secondary px-2 py-1 rounded transition-colors"
                 >
                   {/* Timestamp */}
-                  <span className="text-slate-500 flex-shrink-0 min-w-fit">
+                  <span className="text-muted-foreground flex-shrink-0 min-w-fit">
                     {log.timestamp}
                   </span>
 
@@ -195,13 +195,13 @@ const LiveLogsPanel: React.FC<LiveLogsPanelProps> = ({
                   {/* Copy button */}
                   <button
                     onClick={() => handleCopy(log)}
-                    className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 p-0.5 hover:bg-slate-700/50 rounded"
+                    className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 p-0.5 hover:bg-secondary rounded"
                     title="Copy log"
                   >
                     {copiedIndex === index ? (
-                      <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                      <CheckCircle2 className="w-3 h-3 text-success" />
                     ) : (
-                      <Copy className="w-3 h-3 text-slate-400" />
+                      <Copy className="w-3 h-3 text-muted-foreground" />
                     )}
                   </button>
                 </motion.div>

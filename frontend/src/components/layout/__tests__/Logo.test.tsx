@@ -195,7 +195,7 @@ describe('Logo Component', () => {
     it('should render with proper contrast', () => {
       render(<Logo />);
       const text = screen.getByText(/cloudops/i);
-      expect(text).toHaveClass('text-white', 'dark:text-white');
+      expect(text).toHaveClass('text-foreground', 'dark:text-foreground');
     });
 
     it('should have gradient effect', () => {

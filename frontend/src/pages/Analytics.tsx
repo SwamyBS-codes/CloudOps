@@ -17,11 +17,9 @@ import {
   YAxis,
 } from 'recharts';
 import { CheckCircle2, Clock3, Loader2, ShieldAlert, TrendingUp, Cloud } from 'lucide-react';
-import { DashboardLayout } from '@/components/layout';
 import { analyticsService } from '@/services/auth-service';
 import { PageHeader, MetricCard, Alert, ChartContainer, Card } from '@/components/ui';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useTheme } from '@/context/ThemeContext';
 
 type DashboardAnalytics = {
   summary?: {
@@ -63,12 +61,12 @@ type DeploymentsAnalytics = {
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  success: '#34d399',
-  failed: '#fb7185',
-  running: '#22d3ee',
-  deploying: '#38bdf8',
-  queued: '#f59e0b',
-  default: '#a78bfa',
+  success: 'hsl(var(--success))',
+  failed: 'hsl(var(--destructive))',
+  running: 'hsl(var(--chart-1))',
+  deploying: 'hsl(var(--chart-2))',
+  queued: 'hsl(var(--warning))',
+  default: 'hsl(var(--chart-3))',
 };
 
 const formatDuration = (ms = 0) => {
@@ -82,18 +80,17 @@ const formatDuration = (ms = 0) => {
 
 const formatUsd = (value = 0) => `$${value.toFixed(4)}`;
 
-const chartTooltipStyle = (isDark: boolean) => ({
-  background: isDark ? 'hsl(222 47% 9%)' : 'hsl(0 0% 100%)',
-  border: isDark ? '1px solid hsl(217 33% 17%)' : '1px solid hsl(220 13% 91%)',
-  borderRadius: 10,
-  color: isDark ? 'hsl(210 40% 98%)' : 'hsl(224 71% 4%)',
-});
+const chartTooltipStyle = {
+  background: 'hsl(var(--popover))',
+  border: '1px solid hsl(var(--border))',
+  borderRadius: 0,
+  color: 'hsl(var(--popover-foreground))',
+};
 
 export default function AnalyticsPage(){
   const [days, setDays] = useState(30);
-  const { theme } = useTheme();
-  const isDark = theme === 'dark';
-  const tooltipStyle = chartTooltipStyle(isDark);
+  const isDark = true;
+  const tooltipStyle = chartTooltipStyle;
   const queryParams = useMemo(() => ({ days }), [days]);
 
   const dashboardQuery = useQuery({
@@ -142,7 +139,7 @@ export default function AnalyticsPage(){
   ];
 
   return (
-    <DashboardLayout>
+    <>
       <PageHeader
         title="Analytics"
         description="Real deployment analytics powered by your deployment history."
@@ -186,17 +183,17 @@ export default function AnalyticsPage(){
                     <AreaChart data={dashboard.deploymentTrend || []}>
                       <defs>
                         <linearGradient id="trendGradient" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#6366f1" stopOpacity={0.4} />
-                          <stop offset="100%" stopColor="#6366f1" stopOpacity={0.05} />
+                          <stop offset="0%" stopColor="hsl(var(--chart-1))" stopOpacity={0.4} />
+                          <stop offset="100%" stopColor="hsl(var(--chart-1))" stopOpacity={0.05} />
                         </linearGradient>
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" stroke={isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'} />
                       <XAxis dataKey="date" tick={{ fill: isDark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.5)', fontSize: 11 }} />
                       <YAxis tick={{ fill: isDark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.5)', fontSize: 11 }} />
                       <Tooltip contentStyle={tooltipStyle} />
-                      <Area type="monotone" dataKey="count" stroke="#6366f1" fill="url(#trendGradient)" strokeWidth={2} />
-                      <Line type="monotone" dataKey="success" stroke="#10b981" strokeWidth={2} dot={false} />
-                      <Line type="monotone" dataKey="failed" stroke="#f43f5e" strokeWidth={2} dot={false} />
+                      <Area type="monotone" dataKey="count" stroke="hsl(var(--chart-1))" fill="url(#trendGradient)" strokeWidth={2} />
+                      <Line type="monotone" dataKey="success" stroke="hsl(var(--success))" strokeWidth={2} dot={false} />
+                      <Line type="monotone" dataKey="failed" stroke="hsl(var(--destructive))" strokeWidth={2} dot={false} />
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
@@ -227,7 +224,7 @@ export default function AnalyticsPage(){
                       <XAxis dataKey="framework" tick={{ fill: isDark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.5)', fontSize: 11 }} />
                       <YAxis tick={{ fill: isDark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.5)', fontSize: 11 }} />
                       <Tooltip contentStyle={tooltipStyle} />
-                      <Bar dataKey="count" fill="#6366f1" radius={[6, 6, 0, 0]} />
+                      <Bar dataKey="count" fill="hsl(var(--chart-1))" />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -272,6 +269,6 @@ export default function AnalyticsPage(){
           </div>
         </>
       )}
-    </DashboardLayout>
+    </>
   );
 }

@@ -14,12 +14,12 @@ const AWSConnectionErrorState: React.FC = () => {
         { label: 'Retry', onClick: () => window.location.reload(), variant: 'secondary' },
       ]}
       illustration={
-        <div className="mx-auto flex items-center gap-3 text-white/50">
-          <div className="rounded-2xl border border-rose-400/15 bg-rose-500/10 p-4 text-rose-100">
+        <div className="mx-auto flex items-center gap-3 text-muted-foreground">
+          <div className="rounded-2xl border border-destructive bg-destructive/10 p-4 text-destructive">
             <CloudOff className="h-6 w-6" />
           </div>
           <RefreshCw className="h-5 w-5" />
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-cyan-200">
+          <div className="rounded-2xl border border-border bg-secondary p-4 text-primary">
             <KeyRound className="h-6 w-6" />
           </div>
         </div>

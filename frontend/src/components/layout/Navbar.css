@@ -34,8 +34,8 @@
   @apply flex items-center justify-center;
   width: 40px;
   height: 40px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, rgba(108, 99, 255, 0.1), rgba(0, 212, 255, 0.05));
+  border-radius: 0;
+  background: linear-gradient(135deg, rgba(36, 88, 211, 0.1), rgba(36, 88, 211, 0.05));
   border: 1px solid var(--color-border);
   display: flex;
   align-items: center;
@@ -44,9 +44,9 @@
 }
 
 .logo-icon:hover {
-  background: linear-gradient(135deg, rgba(108, 99, 255, 0.2), rgba(0, 212, 255, 0.1));
+  background: linear-gradient(135deg, rgba(36, 88, 211, 0.2), rgba(36, 88, 211, 0.1));
   border-color: var(--color-primary);
-  box-shadow: 0 0 15px rgba(108, 99, 255, 0.2);
+  box-shadow: 0 0 15px rgba(36, 88, 211, 0.2);
 }
 
 .logo-text {
@@ -56,7 +56,7 @@
 .logo-title {
   @apply font-bold text-lg leading-none;
   color: var(--color-text-primary);
-  background: linear-gradient(135deg, #6c63ff 0%, #00d4ff 100%);
+  background: linear-gradient(135deg, #2458D3 0%, #218B60 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -106,7 +106,7 @@
   @apply absolute bottom-0 left-0 right-0;
   height: 2px;
   background: linear-gradient(90deg, var(--color-primary), var(--color-accent));
-  border-radius: 2px;
+  border-radius: 0;
   opacity: 0;
   transition: opacity var(--duration-fast) var(--timing-smooth);
   transform-origin: left;
@@ -153,7 +153,7 @@
 .btn-menu-mobile {
   width: 52px;
   height: 52px;
-  border-radius: 16px;
+  border-radius: 0;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: linear-gradient(145deg, rgba(11, 18, 32, 0.95), rgba(6, 11, 22, 0.9));
   box-shadow:
@@ -180,7 +180,7 @@
 .menu-bars span {
   width: 18px;
   height: 2px;
-  border-radius: 999px;
+  border-radius: 0;
   background: #25d7ff;
   box-shadow: 0 0 8px rgba(37, 215, 255, 0.4);
 }
@@ -239,7 +239,7 @@
 
 .mobile-github-btn {
   @apply flex items-center justify-center gap-md px-lg py-md rounded-lg;
-  background: linear-gradient(135deg, #6c63ff, #00d4ff);
+  background: linear-gradient(135deg, #2458D3, #218B60);
   color: white;
   font-weight: 600;
   text-decoration: none;
@@ -247,7 +247,7 @@
   margin-top: var(--space-md);
 
   &:hover {
-    box-shadow: 0 0 20px rgba(108, 99, 255, 0.5);
+    box-shadow: 0 0 20px rgba(36, 88, 211, 0.5);
     transform: translateY(-2px);
   }
 
@@ -315,7 +315,7 @@
 
 .mobile-menu-content::-webkit-scrollbar-thumb {
   background: var(--color-border);
-  border-radius: 3px;
+  border-radius: 0;
 
   &:hover {
     background: var(--color-text-tertiary);

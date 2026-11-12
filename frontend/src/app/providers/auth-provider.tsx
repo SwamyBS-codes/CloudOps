@@ -124,10 +124,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#06070f] text-white">
-        <div className="text-center px-4 py-8 rounded-3xl border border-white/10 bg-white/5 shadow-xl backdrop-blur-md">
+      <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
+        <div className="text-center px-4 py-8 border border-border bg-card">
           <div className="text-xl font-semibold mb-2">Checking authentication…</div>
-          <div className="text-sm text-white/70">Please wait while we restore your session.</div>
+          <div className="text-sm text-muted-foreground">Please wait while we restore your session.</div>
         </div>
       </div>
     );

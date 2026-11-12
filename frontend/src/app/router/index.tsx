@@ -1,7 +1,7 @@
-import { AnimatePresence, motion } from 'framer-motion';
-import { Routes as RouterRoutes, Route, useLocation, Navigate } from 'react-router-dom';
+import { Routes as RouterRoutes, Route, Navigate } from 'react-router-dom';
 import ProtectedRoutes from './protected-routes';
 import { lazy, Suspense } from 'react';
+import DashboardLayout from '@/components/layout/DashboardLayout';
 import {
   DashboardStatsLoadingState,
   AnalyticsChartSkeleton,
@@ -24,17 +24,6 @@ const EnvironmentVariablesPage = lazy(() => import('@/pages/EnvironmentVariables
 const DocsPage = lazy(() => import('@/pages/Docs'));
 const DeploymentPipelineShowcase = lazy(() => import('@/pages/DeploymentPipelineShowcase'));
 
-const pageVariants = {
-  initial: { opacity: 0, y: 18, scale: 0.99 },
-  animate: { opacity: 1, y: 0 },
-  exit: { opacity: 0, y: -12, scale: 0.99 },
-};
-
-const pageTransition = {
-  duration: 0.3,
-  ease: 'easeInOut',
-};
-
 const PageLoader = () => (
   <div className="page-shell page-shell--wide">
     <div className="grid gap-4 lg:grid-cols-3">
@@ -51,45 +40,33 @@ const PageLoader = () => (
 );
 
 function Routes() {
-  const location = useLocation();
-
   return (
-    <AnimatePresence mode="wait">
-      <motion.div
-        key={location.pathname}
-        variants={pageVariants}
-        initial="initial"
-        animate="animate"
-        exit="exit"
-        transition={pageTransition}
-        className="relative z-10"
-      >
-        <Suspense fallback={<PageLoader />}>
-          <RouterRoutes location={location} key={location.pathname}>
-            <Route path="/" element={<HomePage />} />
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/demo/deployment-pipeline" element={<DeploymentPipelineShowcase />} />
+    <Suspense fallback={<PageLoader />}>
+      <RouterRoutes>
+        <Route path="/" element={<HomePage />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/demo/deployment-pipeline" element={<DeploymentPipelineShowcase />} />
 
-            <Route element={<ProtectedRoutes />}>
-              <Route path="/dashboard" element={<DashboardPage />} />
-              <Route path="/analytics" element={<AnalyticsPage />} />
-              <Route path="/billing" element={<BillingPage />} />
-              <Route path="/settings" element={<SettingsPage />} />
-              <Route path="/deployments" element={<DeploymentsPage />} />
-              <Route path="/deployment-logs" element={<DeploymentsPage />} />
-              <Route path="/deployments/:id" element={<DeploymentDetailPage />} />
-              <Route path="/live-projects" element={<LiveProjectsPage />} />
-              <Route path="/environment-variables" element={<EnvironmentVariablesPage />} />
-              <Route path="/deploy/:owner/:repo" element={<DeployProject />} />
-            </Route>
+        <Route element={<ProtectedRoutes />}>
+          <Route element={<DashboardLayout />}>
+            <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/analytics" element={<AnalyticsPage />} />
+            <Route path="/billing" element={<BillingPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/deployments" element={<DeploymentsPage />} />
+            <Route path="/deployment-logs" element={<DeploymentsPage />} />
+            <Route path="/deployments/:id" element={<DeploymentDetailPage />} />
+            <Route path="/live-projects" element={<LiveProjectsPage />} />
+            <Route path="/environment-variables" element={<EnvironmentVariablesPage />} />
+          </Route>
+          <Route path="/deploy/:owner/:repo" element={<DeployProject />} />
+        </Route>
 
-            <Route path="/docs" element={<DocsPage />} />
+        <Route path="/docs" element={<DocsPage />} />
 
-            <Route path="*" element={<Navigate replace to="/" />} />
-          </RouterRoutes>
-        </Suspense>
-      </motion.div>
-    </AnimatePresence>
+        <Route path="*" element={<Navigate replace to="/" />} />
+      </RouterRoutes>
+    </Suspense>
   );
 }
 

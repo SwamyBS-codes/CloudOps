@@ -40,24 +40,24 @@ const GitHubIntegration: React.FC = () => {
   };
 
   return (
-    <motion.section whileHover={{ y: -4 }} className="rounded-2xl border border-white/8 bg-[rgba(10,14,24,0.62)] backdrop-blur-md p-5 shadow-[0_20px_60px_rgba(2,6,23,0.35)]">
+    <motion.section whileHover={{ y: -4 }} className="rounded-2xl border border-border bg-card  p-5 ">
       <div className="flex items-center justify-between gap-4 mb-5">
         <div>
-          <h2 className="text-lg font-semibold text-white">GitHub integration</h2>
-          <p className="text-sm text-white/60">Manage repository access and deployments.</p>
+          <h2 className="text-lg font-semibold text-foreground">GitHub integration</h2>
+          <p className="text-sm text-muted-foreground">Manage repository access and deployments.</p>
         </div>
-        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/6 text-white">
+        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-secondary text-foreground">
           <Github className="h-5 w-5" />
         </div>
       </div>
 
       <div className="space-y-4">
-        <div className="flex items-center justify-between rounded-xl border border-white/8 bg-white/5 px-4 py-3 text-sm text-white/80">
+        <div className="flex items-center justify-between rounded-xl border border-border bg-secondary px-4 py-3 text-sm text-foreground">
           <div className="flex items-center gap-3">
-            <Link2 className="h-4 w-4 text-cyan-300" />
+            <Link2 className="h-4 w-4 text-primary" />
             <span>{account || 'No GitHub account linked'}</span>
           </div>
-          <span className={`rounded-full px-3 py-1 text-xs ${connected ? 'bg-emerald-500/15 text-emerald-200' : 'bg-rose-500/15 text-rose-200'}`}>
+          <span className={`rounded-full px-3 py-1 text-xs ${connected ? 'bg-success/10 text-success' : 'bg-destructive/10 text-destructive'}`}>
             {connected ? 'Connected' : 'Disconnected'}
           </span>
         </div>
@@ -65,7 +65,7 @@ const GitHubIntegration: React.FC = () => {
         <button
           type="button"
           onClick={handleGitHubAction}
-          className="w-full rounded-xl border border-cyan-400/20 bg-cyan-500/10 px-4 py-3 text-sm font-medium text-cyan-100 transition hover:bg-cyan-500/15"
+          className="w-full rounded-xl border border-primary bg-primary/10 px-4 py-3 text-sm font-medium text-primary transition hover:bg-primary/90"
         >
           {connected ? 'Disconnect GitHub' : 'Connect GitHub'}
         </button>
@@ -73,13 +73,13 @@ const GitHubIntegration: React.FC = () => {
         <button
           type="button"
           onClick={handleSyncWithAuth}
-          className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white/80 transition hover:bg-white/10"
+          className="w-full rounded-xl border border-border bg-secondary px-4 py-3 text-sm font-medium text-foreground transition hover:bg-secondary"
         >
           Sync with active login
         </button>
 
-        <div className="flex items-center gap-3 text-sm text-white/60">
-          <ShieldCheck className="h-4 w-4 text-emerald-300" />
+        <div className="flex items-center gap-3 text-sm text-muted-foreground">
+          <ShieldCheck className="h-4 w-4 text-success" />
           Scoped repository access with deployment-only permissions.
         </div>
       </div>

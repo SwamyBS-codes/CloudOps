@@ -3,7 +3,7 @@ import Skeleton from './Skeleton';
 
 const AnalyticsChartSkeleton: React.FC = () => {
   return (
-    <div className="rounded-2xl border border-white/8 bg-[rgba(10,14,24,0.62)] backdrop-blur-md p-5 shadow-[0_20px_60px_rgba(2,6,23,0.35)]">
+    <div className="rounded-2xl border border-border bg-card  p-5 ">
       <div className="flex items-center justify-between gap-3">
         <div className="space-y-2">
           <Skeleton className="h-4 w-36" />

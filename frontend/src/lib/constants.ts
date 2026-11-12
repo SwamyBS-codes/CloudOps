@@ -59,12 +59,12 @@ export const REFRESH_INTERVAL = 60000; // 1 minute
 
 // Colors
 export const COLORS = {
-  PRIMARY: '#6C63FF',
-  ACCENT: '#00D4FF',
-  SUCCESS: '#00C896',
-  ERROR: '#FF5D73',
-  WARNING: '#F59E0B',
-  INFO: '#00D4FF',
+  PRIMARY: '#2458D3',
+  ACCENT: '#218B60',
+  SUCCESS: '#218B60',
+  ERROR: '#D33B3B',
+  WARNING: '#B97812',
+  INFO: '#2458D3',
 };
 
 // Features

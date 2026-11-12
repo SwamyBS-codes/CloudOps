@@ -1,8 +1,7 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Bell, Sun, Moon, Menu, Plus, Settings, LogOut, User } from 'lucide-react';
+import { Search, Bell, Menu, Plus, Settings, LogOut, User } from 'lucide-react';
 import { useAuth } from '@/app/providers/auth-provider';
-import { useTheme } from '@/context/ThemeContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -18,7 +17,6 @@ import { cn } from '@/lib/utils';
 const TopNavbar: React.FC<{ onToggleMobileSidebar?: () => void }> = ({ onToggleMobileSidebar }) => {
   const navigate = useNavigate();
   const { logout, user } = useAuth();
-  const { theme, toggleTheme } = useTheme();
 
   const userName = user?.username || user?.name || user?.login || 'User';
   const userInitial = userName[0]?.toUpperCase() || 'U';
@@ -29,7 +27,7 @@ const TopNavbar: React.FC<{ onToggleMobileSidebar?: () => void }> = ({ onToggleM
   };
 
   return (
-    <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur-sm">
+    <header className="sticky top-0 z-30 border-b border-border bg-background">
       <div className="flex h-14 items-center gap-3 px-4 lg:px-6">
         {/* Mobile menu */}
         <Button
@@ -48,7 +46,7 @@ const TopNavbar: React.FC<{ onToggleMobileSidebar?: () => void }> = ({ onToggleM
             placeholder="Search deployments, repos..."
             icon={<Search className="h-4 w-4" />}
             aria-label="Search"
-            className="h-9 bg-secondary/60"
+            className="h-9 bg-background"
           />
         </div>
 
@@ -57,16 +55,6 @@ const TopNavbar: React.FC<{ onToggleMobileSidebar?: () => void }> = ({ onToggleM
           <Button size="sm" className="hidden sm:inline-flex gap-1.5" onClick={() => navigate('/dashboard')}>
             <Plus className="h-4 w-4" />
             New deploy
-          </Button>
-
-          {/* Theme toggle */}
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={toggleTheme}
-            aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
-          >
-            {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </Button>
 
           {/* Notifications */}
@@ -84,7 +72,7 @@ const TopNavbar: React.FC<{ onToggleMobileSidebar?: () => void }> = ({ onToggleM
                 )}
                 aria-label="User menu"
               >
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+                <div className="flex h-8 w-8 items-center justify-center border border-primary/20 bg-primary text-xs font-bold text-primary-foreground">
                   {userInitial}
                 </div>
                 <span className="hidden text-sm font-medium text-foreground md:block">{userName}</span>
@@ -119,4 +107,4 @@ const TopNavbar: React.FC<{ onToggleMobileSidebar?: () => void }> = ({ onToggleM
   );
 };
 
-export default TopNavbar;
+export default memo(TopNavbar);

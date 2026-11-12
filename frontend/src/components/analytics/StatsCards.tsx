@@ -4,13 +4,13 @@ import { Server, Code, CheckCircle2, Clock } from 'lucide-react';
 
 const StatCard: React.FC<{ label: string; value: string; icon: React.ReactNode }>=({label,value,icon})=>{
   return (
-    <motion.div whileHover={{ y: -4 }} className="backdrop-blur-md bg-[rgba(12,16,26,0.6)] border border-white/6 rounded-xl p-4">
+    <motion.div whileHover={{ y: -4 }} className=" bg-card border border-border rounded-xl p-4">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <div className="text-sm text-white/60">{label}</div>
-          <div className="text-2xl font-bold text-white mt-1">{value}</div>
+          <div className="text-sm text-muted-foreground">{label}</div>
+          <div className="text-2xl font-bold text-foreground mt-1">{value}</div>
         </div>
-        <div className="w-12 h-12 rounded-lg bg-gradient-to-tr from-primary to-accent flex items-center justify-center text-white shadow-glow">
+        <div className="w-12 h-12 rounded-lg bg-gradient-to-tr from-primary to-accent flex items-center justify-center text-foreground shadow-glow">
           {icon}
         </div>
       </div>

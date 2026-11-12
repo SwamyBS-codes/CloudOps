@@ -28,13 +28,13 @@ const DeploymentHeader: React.FC<DeploymentHeaderProps> = ({
   const getStatusBadgeColor = () => {
     switch (status) {
       case 'success':
-        return 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30';
+        return 'bg-success/10 text-success border-success';
       case 'failed':
-        return 'bg-red-500/20 text-red-300 border-red-500/30';
+        return 'bg-destructive/10 text-destructive border-destructive';
       case 'in-progress':
-        return 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30';
+        return 'bg-primary/10 text-primary border-primary';
       default:
-        return 'bg-slate-500/20 text-slate-300 border-slate-500/30';
+        return 'bg-secondary text-muted-foreground border-border';
     }
   };
 
@@ -60,10 +60,10 @@ const DeploymentHeader: React.FC<DeploymentHeaderProps> = ({
       {/* Title and Status */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">
+          <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-2">
             {deploymentName}
           </h1>
-          <p className="text-slate-400 text-sm">{commitMessage || 'Deployment in progress'}</p>
+          <p className="text-muted-foreground text-sm">{commitMessage || 'Deployment in progress'}</p>
         </div>
 
         {/* Status Badge with Animation */}
@@ -82,10 +82,10 @@ const DeploymentHeader: React.FC<DeploymentHeaderProps> = ({
       {/* Progress Bar */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <span className="text-sm font-medium text-slate-300">Overall Progress</span>
-          <span className="text-sm font-semibold text-cyan-400">{overallProgress}%</span>
+          <span className="text-sm font-medium text-muted-foreground">Overall Progress</span>
+          <span className="text-sm font-semibold text-primary">{overallProgress}%</span>
         </div>
-        <div className="relative h-2 bg-slate-800 rounded-full overflow-hidden border border-slate-700">
+        <div className="relative h-2 bg-secondary rounded-full overflow-hidden border border-border">
           <motion.div
             initial={{ width: 0 }}
             animate={{ width: `${overallProgress}%` }}
@@ -113,13 +113,13 @@ const DeploymentHeader: React.FC<DeploymentHeaderProps> = ({
       {/* Meta Information Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
         {/* Repository */}
-        <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-3 hover:border-slate-600 transition-colors">
-          <p className="text-xs text-slate-400 uppercase tracking-wider mb-1">Repository</p>
+        <div className="bg-secondary border border-border rounded-lg p-3 hover:border-primary transition-colors">
+          <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Repository</p>
           <a
             href={repoUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-sm font-medium text-cyan-400 hover:text-cyan-300 flex items-center gap-2 group transition-colors"
+            className="text-sm font-medium text-primary hover:text-primary flex items-center gap-2 group transition-colors"
           >
             <span className="truncate">{repoName}</span>
             <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
@@ -127,18 +127,18 @@ const DeploymentHeader: React.FC<DeploymentHeaderProps> = ({
         </div>
 
         {/* Branch */}
-        <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-3 hover:border-slate-600 transition-colors">
-          <p className="text-xs text-slate-400 uppercase tracking-wider mb-1">Branch</p>
-          <div className="text-sm font-medium text-white flex items-center gap-2">
+        <div className="bg-secondary border border-border rounded-lg p-3 hover:border-primary transition-colors">
+          <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Branch</p>
+          <div className="text-sm font-medium text-foreground flex items-center gap-2">
             <GitBranch className="w-4 h-4 text-blue-400" />
             <span className="truncate">{branch}</span>
           </div>
         </div>
 
         {/* Commit ID */}
-        <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-3 hover:border-slate-600 transition-colors">
-          <p className="text-xs text-slate-400 uppercase tracking-wider mb-1">Commit</p>
-          <div className="text-sm font-medium text-white flex items-center gap-2">
+        <div className="bg-secondary border border-border rounded-lg p-3 hover:border-primary transition-colors">
+          <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Commit</p>
+          <div className="text-sm font-medium text-foreground flex items-center gap-2">
             <GitCommit className="w-4 h-4 text-purple-400" />
             <code className="truncate font-mono text-xs">{commitId.substring(0, 8)}</code>
           </div>
@@ -146,13 +146,13 @@ const DeploymentHeader: React.FC<DeploymentHeaderProps> = ({
 
         {/* Deployment URL (if available) */}
         {deploymentUrl && (
-          <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-3 hover:border-slate-600 transition-colors">
-            <p className="text-xs text-slate-400 uppercase tracking-wider mb-1">Live URL</p>
+          <div className="bg-secondary border border-border rounded-lg p-3 hover:border-primary transition-colors">
+            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Live URL</p>
             <a
               href={deploymentUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-sm font-medium text-emerald-400 hover:text-emerald-300 flex items-center gap-2 group transition-colors"
+              className="text-sm font-medium text-success hover:text-success flex items-center gap-2 group transition-colors"
             >
               <span className="truncate">Visit Live</span>
               <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />

@@ -204,7 +204,7 @@ export function DeploymentDetailWithPipeline() {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center min-h-screen">
-          <div className="text-white">Loading deployment details...</div>
+          <div className="text-foreground">Loading deployment details...</div>
         </div>
       </DashboardLayout>
     );
@@ -214,7 +214,7 @@ export function DeploymentDetailWithPipeline() {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center min-h-screen">
-          <div className="text-red-400">{error}</div>
+          <div className="text-destructive">{error}</div>
         </div>
       </DashboardLayout>
     );
@@ -224,7 +224,7 @@ export function DeploymentDetailWithPipeline() {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center min-h-screen">
-          <div className="text-slate-400">Deployment not found</div>
+          <div className="text-muted-foreground">Deployment not found</div>
         </div>
       </DashboardLayout>
     );

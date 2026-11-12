@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { memo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { NavLink, Link } from 'react-router-dom';
 import {
@@ -48,14 +48,14 @@ const Sidebar: React.FC<{
       onMouseEnter={() => collapsed && setHoverExpanded(true)}
       onMouseLeave={() => setHoverExpanded(false)}
       className={cn(
-        'relative z-20 flex h-full flex-col border-r border-border bg-card',
+        'relative z-20 flex h-full flex-col border-r border-border bg-background',
         mobile && 'w-[260px]'
       )}
       aria-label="Main navigation"
     >
-      <div className={cn('flex items-center border-b border-border px-4 py-4', isCollapsed && 'justify-center px-2')}>
+      <div className={cn('flex min-h-16 items-center border-b border-border px-4 py-4', isCollapsed && 'justify-center px-2')}>
         <Link to="/dashboard" className="flex items-center gap-2.5 rounded-lg p-1 hover:bg-secondary" aria-label="Dashboard">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center border border-primary/20 bg-primary text-primary-foreground">
             <Cloud className="h-4 w-4" />
           </div>
           {!isCollapsed && (
@@ -76,13 +76,14 @@ const Sidebar: React.FC<{
                 <NavLink
                   to={item.href}
                   title={isCollapsed ? item.label : undefined}
+                  onClick={() => mobile && onCollapse?.(false)}
                   className={({ isActive }) =>
                     cn(
-                      'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                      'flex items-center gap-3 border-l-2 px-3 py-2.5 text-sm font-medium transition-colors',
                       isCollapsed && 'justify-center px-2',
                       isActive
-                        ? 'bg-primary/10 text-primary'
-                        : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+                        ? 'border-primary bg-primary/5 text-primary'
+                        : 'border-transparent text-muted-foreground hover:bg-secondary hover:text-foreground'
                     )
                   }
                 >
@@ -114,4 +115,4 @@ const Sidebar: React.FC<{
   );
 };
 
-export default Sidebar;
+export default memo(Sidebar);

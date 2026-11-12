@@ -12,7 +12,6 @@ import {
   HardDriveDownload,
   Loader2,
 } from 'lucide-react';
-import { DashboardLayout } from '@/components/layout';
 import { deploymentService } from '@/services/auth-service';
 import LiveProgressBar from '@/components/deployments/LiveProgressBar';
 import TerminalStream from '@/components/deployments/TerminalStream';
@@ -171,15 +170,15 @@ const staticPhaseToStep: Record<string, number> = {
 };
 
 const statusStyles: Record<string, string> = {
-  success: 'bg-emerald-500/15 text-emerald-300 border-emerald-400/20',
-  deploying: 'bg-cyan-500/15 text-cyan-300 border-cyan-400/20',
-  running: 'bg-cyan-500/15 text-cyan-300 border-cyan-400/20',
-  building: 'bg-amber-500/15 text-amber-300 border-amber-400/20',
-  pushing: 'bg-amber-500/15 text-amber-300 border-amber-400/20',
-  pending: 'bg-white/6 text-white/60 border-white/10',
-  failed: 'bg-rose-500/15 text-rose-300 border-rose-400/20',
-  cancelled: 'bg-white/6 text-white/60 border-white/10',
-  stopped: 'bg-white/6 text-white/60 border-white/10',
+  success: 'bg-success/10 text-success border-success',
+  deploying: 'bg-primary/10 text-primary border-primary',
+  running: 'bg-primary/10 text-primary border-primary',
+  building: 'bg-warning/10 text-warning border-warning',
+  pushing: 'bg-warning/10 text-warning border-warning',
+  pending: 'bg-secondary text-muted-foreground border-border',
+  failed: 'bg-destructive/10 text-destructive border-destructive',
+  cancelled: 'bg-secondary text-muted-foreground border-border',
+  stopped: 'bg-secondary text-muted-foreground border-border',
 };
 
 const formatDate = (value?: string) => {
@@ -451,20 +450,20 @@ export default function DeploymentDetailPage() {
   };
 
   return (
-    <DashboardLayout>
+    <>
       <main className="space-y-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <button
             type="button"
             onClick={() => navigate('/deployments')}
-            className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/80 transition hover:bg-white/10"
+            className="inline-flex items-center gap-2 rounded-xl border border-border bg-secondary px-3 py-2 text-sm text-foreground transition hover:bg-secondary"
           >
             <ArrowLeft className="h-4 w-4" />
             Back to deployments
           </button>
 
           {error && (
-            <div className="mt-4 flex items-start gap-3 rounded-2xl border border-rose-400/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
+            <div className="mt-4 flex items-start gap-3 rounded-2xl border border-destructive bg-destructive/10 px-4 py-3 text-sm text-destructive">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
               <span>{error}</span>
             </div>
@@ -472,23 +471,23 @@ export default function DeploymentDetailPage() {
 
           {loading && !deployment ? (
             <div className="mt-8 grid gap-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
-              <div className="h-[560px] animate-pulse rounded-3xl border border-white/10 bg-white/5" />
-              <div className="h-[560px] animate-pulse rounded-3xl border border-white/10 bg-white/5" />
+              <div className="h-[560px] animate-pulse rounded-3xl border border-border bg-secondary" />
+              <div className="h-[560px] animate-pulse rounded-3xl border border-border bg-secondary" />
             </div>
           ) : deployment ? (
             <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
               <div className="min-w-0 space-y-6">
-                <div className="min-w-0 rounded-3xl border border-white/10 bg-[rgba(8,12,20,0.78)] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.28)]">
+                <div className="min-w-0 rounded-3xl border border-border bg-card p-5 ">
                   <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                     <div>
-                      <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs uppercase tracking-[0.24em] text-white/55">
+                      <div className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary px-3 py-1 text-xs uppercase tracking-[0.24em] text-muted-foreground">
                         <HardDriveDownload className="h-3.5 w-3.5" />
                         Deployment details
                       </div>
-                      <h1 className="mt-4 text-3xl font-semibold text-white">
+                      <h1 className="mt-4 text-3xl font-semibold text-foreground">
                         {deployment.repositoryName || 'Deployment'}
                       </h1>
-                      <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-white/60">
+                      <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
                         <span className={`rounded-full border px-3 py-1 text-xs font-medium capitalize ${badgeClass}`}>{status}</span>
                         <span className="inline-flex items-center gap-1.5">
                           <GitBranch className="h-4 w-4" />
@@ -506,14 +505,14 @@ export default function DeploymentDetailPage() {
                         href={liveUrl}
                         target="_blank"
                         rel="noreferrer"
-                        className="inline-flex items-center gap-2 rounded-2xl border border-cyan-400/20 bg-cyan-500/10 px-4 py-3 text-sm font-medium text-cyan-200 transition hover:bg-cyan-500/15"
+                        className="inline-flex items-center gap-2 rounded-2xl border border-primary bg-primary/10 px-4 py-3 text-sm font-medium text-primary transition hover:bg-primary/90"
                       >
                         <Globe2 className="h-4 w-4" />
                         Open live URL
                         <ExternalLink className="h-4 w-4" />
                       </a>
                     ) : (
-                      <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/55">
+                      <div className="rounded-2xl border border-border bg-secondary px-4 py-3 text-sm text-muted-foreground">
                         Live URL will appear after the deployment finishes.
                       </div>
                     )}
@@ -523,25 +522,25 @@ export default function DeploymentDetailPage() {
                           type="button"
                           disabled={bringingDown}
                           onClick={() => setBringDownConfirmOpen(true)}
-                          className="ml-3 inline-flex items-center gap-2 rounded-2xl border border-rose-400/20 bg-rose-500/10 px-4 py-3 text-sm font-medium text-rose-200 transition hover:bg-rose-500/15"
+                          className="ml-3 inline-flex items-center gap-2 rounded-2xl border border-destructive bg-destructive/10 px-4 py-3 text-sm font-medium text-destructive transition hover:bg-destructive/90"
                         >
                           {bringingDown ? 'Bringing down…' : 'Bring Down'}
                         </button>
                         {bringDownConfirmOpen && !bringingDown && (
-                          <div className="rounded-2xl border border-rose-400/20 bg-rose-500/10 p-4 text-sm text-rose-100">
+                          <div className="rounded-2xl border border-destructive bg-destructive/10 p-4 text-sm text-destructive">
                             <div className="font-medium">Terminate the EC2 instance and clean up the ECR repository?</div>
                             <div className="mt-3 flex flex-wrap gap-3">
                               <button
                                 type="button"
                                 onClick={() => void handleBringDown()}
-                                className="rounded-xl bg-rose-500 px-4 py-2 font-medium text-white transition hover:bg-rose-400"
+                                className="rounded-xl bg-destructive px-4 py-2 font-medium text-destructive-foreground transition hover:bg-destructive/90"
                               >
                                 Confirm bring down
                               </button>
                               <button
                                 type="button"
                                 onClick={() => setBringDownConfirmOpen(false)}
-                                className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 font-medium text-white/80 transition hover:bg-white/10"
+                                className="rounded-xl border border-border bg-secondary px-4 py-2 font-medium text-foreground transition hover:bg-secondary"
                               >
                                 Cancel
                               </button>
@@ -551,7 +550,7 @@ export default function DeploymentDetailPage() {
                       </div>
                     )}
                     {isAzureDeployment && deployment.status === 'success' && (
-                      <div className="mt-3 rounded-2xl border border-cyan-400/20 bg-cyan-500/10 p-4 text-sm text-cyan-100">
+                      <div className="mt-3 rounded-2xl border border-primary bg-primary/10 p-4 text-sm text-primary">
                         Azure deployments are managed through ACI/ACR. Use the Azure Portal to terminate resources.
                       </div>
                     )}
@@ -570,16 +569,16 @@ export default function DeploymentDetailPage() {
                       { label: 'Phase', value: deployment.phase || 'preparation' },
                       { label: 'Live URL', value: deployment.domainUrl || liveInfrastructureUrl || 'Pending' },
                     ].map((item) => (
-                      <div key={item.label} className="min-w-0 rounded-2xl border border-white/8 bg-white/4 px-4 py-3">
-                        <div className="text-[11px] uppercase tracking-[0.22em] text-white/40">{item.label}</div>
-                        <div className="mt-2 break-words text-sm font-medium text-white">{item.value}</div>
+                      <div key={item.label} className="min-w-0 rounded-2xl border border-border bg-secondary px-4 py-3">
+                        <div className="text-[11px] uppercase tracking-[0.22em] text-foreground/40">{item.label}</div>
+                        <div className="mt-2 break-words text-sm font-medium text-foreground">{item.value}</div>
                       </div>
                     ))}
                   </div>
                 </div>
 
-                <div className="min-w-0 rounded-3xl border border-white/10 bg-[rgba(8,12,20,0.78)] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.28)]">
-                  <h2 className="text-lg font-semibold text-white">Progress</h2>
+                <div className="min-w-0 rounded-3xl border border-border bg-card p-5 ">
+                  <h2 className="text-lg font-semibold text-foreground">Progress</h2>
                   <div className="mt-4">
                     <LiveProgressBar steps={activeSteps} current={currentStep} progress={progress} />
                   </div>
@@ -588,18 +587,18 @@ export default function DeploymentDetailPage() {
                   </div>
                 </div>
 
-                <div className="min-w-0 rounded-3xl border border-white/10 bg-[rgba(8,12,20,0.78)] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.28)]">
-                  <h2 className="text-lg font-semibold text-white">Deployment logs</h2>
+                <div className="min-w-0 rounded-3xl border border-border bg-card p-5 ">
+                  <h2 className="text-lg font-semibold text-foreground">Deployment logs</h2>
                   <div className="mt-4">
                     {loading ? (
-                      <div className="flex items-center gap-2 text-sm text-white/60">
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <Loader2 className="h-4 w-4 animate-spin" />
                         Loading logs...
                       </div>
                     ) : renderedLogs.length > 0 ? (
                       <TerminalStream logs={renderedLogs} />
                     ) : (
-                      <div className="rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white/60">
+                      <div className="rounded-xl border border-border bg-secondary px-4 py-3 text-sm text-muted-foreground">
                         {deployment.status === 'building' || deployment.status === 'deploying'
                           ? 'Waiting for deployment logs...'
                           : deployment.error?.message || 'No logs recorded for this deployment.'}
@@ -610,8 +609,8 @@ export default function DeploymentDetailPage() {
               </div>
 
               <div className="min-w-0 space-y-6">
-                <div className="min-w-0 rounded-3xl border border-white/10 bg-[rgba(8,12,20,0.78)] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.28)]">
-                  <h2 className="text-lg font-semibold text-white">Project info</h2>
+                <div className="min-w-0 rounded-3xl border border-border bg-card p-5 ">
+                  <h2 className="text-lg font-semibold text-foreground">Project info</h2>
                   <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
                     {[
                       { label: 'Repository name', value: deployment.repositoryName || 'Unknown' },
@@ -620,16 +619,16 @@ export default function DeploymentDetailPage() {
                       { label: 'User ID', value: deployment.userId || 'Unknown' },
                       { label: 'Project ID', value: deployment.projectId || 'Not linked' },
                     ].map((item) => (
-                      <div key={item.label} className="min-w-0 rounded-2xl border border-white/8 bg-white/4 px-4 py-3">
-                        <div className="text-[11px] uppercase tracking-[0.22em] text-white/40">{item.label}</div>
-                        <div className="mt-2 break-words text-sm text-white">{item.value}</div>
+                      <div key={item.label} className="min-w-0 rounded-2xl border border-border bg-secondary px-4 py-3">
+                        <div className="text-[11px] uppercase tracking-[0.22em] text-foreground/40">{item.label}</div>
+                        <div className="mt-2 break-words text-sm text-foreground">{item.value}</div>
                       </div>
                     ))}
                   </div>
                 </div>
 
-                <div className="min-w-0 rounded-3xl border border-white/10 bg-[rgba(8,12,20,0.78)] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.28)]">
-                  <h2 className="text-lg font-semibold text-white">Source and build</h2>
+                <div className="min-w-0 rounded-3xl border border-border bg-card p-5 ">
+                  <h2 className="text-lg font-semibold text-foreground">Source and build</h2>
                   <div className="mt-4 grid gap-3 sm:grid-cols-2">
                     {[
                       { label: 'Last commit', value: `${commitHash} ${fullCommitHash !== commitHash ? `(${fullCommitHash})` : ''}`.trim() },
@@ -642,16 +641,16 @@ export default function DeploymentDetailPage() {
                       { label: 'Docker build time', value: dockerBuildTime ? formatDuration(dockerBuildTime) : 'Pending' },
                       { label: 'Docker image size', value: dockerImageSize ? `${(dockerImageSize / (1024 * 1024)).toFixed(2)} MB` : 'Pending' },
                     ].map((item) => (
-                      <div key={item.label} className="min-w-0 rounded-2xl border border-white/8 bg-white/4 px-4 py-3">
-                        <div className="text-[11px] uppercase tracking-[0.22em] text-white/40">{item.label}</div>
-                        <div className="mt-2 break-all text-sm font-medium text-white">{item.value}</div>
+                      <div key={item.label} className="min-w-0 rounded-2xl border border-border bg-secondary px-4 py-3">
+                        <div className="text-[11px] uppercase tracking-[0.22em] text-foreground/40">{item.label}</div>
+                        <div className="mt-2 break-all text-sm font-medium text-foreground">{item.value}</div>
                       </div>
                     ))}
                   </div>
                 </div>
 
-                <div className="min-w-0 rounded-3xl border border-white/10 bg-[rgba(8,12,20,0.78)] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.28)]">
-                  <h2 className="text-lg font-semibold text-white mb-4">Infrastructure Details</h2>
+                <div className="min-w-0 rounded-3xl border border-border bg-card p-5 ">
+                  <h2 className="text-lg font-semibold text-foreground mb-4">Infrastructure Details</h2>
                   
                   {/* AWS EC2 Deployment */}
                   {isAwsDeployment && !isStaticDeployment && (
@@ -677,8 +676,8 @@ export default function DeploymentDetailPage() {
                         </div>
                       </div>
 
-                      <div className="border-l-2 border-amber-400/30 pl-4">
-                        <h3 className="text-sm font-semibold text-amber-400 mb-3">ECR (Docker Registry)</h3>
+                      <div className="border-l-2 border-warning pl-4">
+                        <h3 className="text-sm font-semibold text-warning mb-3">ECR (Docker Registry)</h3>
                         <div className="grid gap-3 sm:grid-cols-2">
                           {[
                             { label: 'Repository Name', value: ecrRepository },
@@ -688,9 +687,9 @@ export default function DeploymentDetailPage() {
                             { label: 'Build Time', value: dockerBuildTime ? formatDuration(dockerBuildTime) : 'Pending' },
                             { label: 'Image Size', value: dockerImageSize ? `${(dockerImageSize / (1024 * 1024)).toFixed(2)} MB` : 'Pending' },
                           ].map((item) => (
-                            <div key={item.label} className="min-w-0 rounded-2xl border border-amber-400/10 bg-amber-500/5 px-4 py-3">
-                              <div className="text-[11px] uppercase tracking-[0.22em] text-amber-400/60">{item.label}</div>
-                              <div className="mt-2 break-all text-sm font-medium text-amber-200">{item.value}</div>
+                            <div key={item.label} className="min-w-0 rounded-2xl border border-warning bg-warning/10 px-4 py-3">
+                              <div className="text-[11px] uppercase tracking-[0.22em] text-warning">{item.label}</div>
+                              <div className="mt-2 break-all text-sm font-medium text-warning">{item.value}</div>
                             </div>
                           ))}
                         </div>
@@ -700,8 +699,8 @@ export default function DeploymentDetailPage() {
 
                   {/* S3 Static Deployment */}
                   {isStaticDeployment && (
-                    <div className="border-l-2 border-emerald-400/30 pl-4">
-                      <h3 className="text-sm font-semibold text-emerald-400 mb-3">S3 Static Hosting</h3>
+                    <div className="border-l-2 border-success pl-4">
+                      <h3 className="text-sm font-semibold text-success mb-3">S3 Static Hosting</h3>
                       <div className="grid gap-3 sm:grid-cols-2">
                         {[
                           { label: 'Region', value: infrastructure?.region || 'Pending' },
@@ -711,9 +710,9 @@ export default function DeploymentDetailPage() {
                           { label: 'Public IP', value: deploymentPublicIp },
                           { label: 'Live URL', value: deployment.domainUrl || liveInfrastructureUrl || 'Pending' },
                         ].map((item) => (
-                          <div key={item.label} className="min-w-0 rounded-2xl border border-emerald-400/10 bg-emerald-500/5 px-4 py-3">
-                            <div className="text-[11px] uppercase tracking-[0.22em] text-emerald-400/60">{item.label}</div>
-                            <div className="mt-2 break-all text-sm font-medium text-emerald-200">{item.value}</div>
+                          <div key={item.label} className="min-w-0 rounded-2xl border border-success bg-success/10 px-4 py-3">
+                            <div className="text-[11px] uppercase tracking-[0.22em] text-success">{item.label}</div>
+                            <div className="mt-2 break-all text-sm font-medium text-success">{item.value}</div>
                           </div>
                         ))}
                       </div>
@@ -742,8 +741,8 @@ export default function DeploymentDetailPage() {
                         </div>
                       </div>
 
-                      <div className="border-l-2 border-cyan-400/30 pl-4">
-                        <h3 className="text-sm font-semibold text-cyan-400 mb-3">Azure Container Instances (ACI)</h3>
+                      <div className="border-l-2 border-primary pl-4">
+                        <h3 className="text-sm font-semibold text-primary mb-3">Azure Container Instances (ACI)</h3>
                         <div className="grid gap-3 sm:grid-cols-2">
                           {[
                             { label: 'Resource Group', value: azureAciResourceGroup },
@@ -755,9 +754,9 @@ export default function DeploymentDetailPage() {
                             { label: 'FQDN / IP', value: azureAciFqdn },
                             { label: 'Status', value: azureAciStatus },
                           ].map((item) => (
-                            <div key={item.label} className="min-w-0 rounded-2xl border border-cyan-400/10 bg-cyan-500/5 px-4 py-3">
-                              <div className="text-[11px] uppercase tracking-[0.22em] text-cyan-400/60">{item.label}</div>
-                              <div className="mt-2 break-all text-sm font-medium text-cyan-200">{item.value}</div>
+                            <div key={item.label} className="min-w-0 rounded-2xl border border-primary bg-primary/10 px-4 py-3">
+                              <div className="text-[11px] uppercase tracking-[0.22em] text-primary">{item.label}</div>
+                              <div className="mt-2 break-all text-sm font-medium text-primary">{item.value}</div>
                             </div>
                           ))}
                         </div>
@@ -766,8 +765,8 @@ export default function DeploymentDetailPage() {
                   )}
 
                   {/* Common Info */}
-                  <div className="mt-6 border-t border-white/10 pt-6">
-                    <h3 className="text-sm font-semibold text-white/80 mb-3">General</h3>
+                  <div className="mt-6 border-t border-border pt-6">
+                    <h3 className="text-sm font-semibold text-foreground mb-3">General</h3>
                     <div className="grid gap-3 sm:grid-cols-2">
                       {[
                         { label: 'Provider', value: deploymentProvider.toUpperCase() },
@@ -776,9 +775,9 @@ export default function DeploymentDetailPage() {
                         { label: 'Live URL', value: deployment.domainUrl || liveInfrastructureUrl || 'Pending' },
                         { label: 'Deploy State', value: infrastructure?.deployState || 'Pending' },
                       ].map((item) => (
-                        <div key={item.label} className="min-w-0 rounded-2xl border border-white/8 bg-white/4 px-4 py-3">
-                          <div className="text-[11px] uppercase tracking-[0.22em] text-white/40">{item.label}</div>
-                          <div className="mt-2 break-all text-sm font-medium text-white">{item.value}</div>
+                        <div key={item.label} className="min-w-0 rounded-2xl border border-border bg-secondary px-4 py-3">
+                          <div className="text-[11px] uppercase tracking-[0.22em] text-foreground/40">{item.label}</div>
+                          <div className="mt-2 break-all text-sm font-medium text-foreground">{item.value}</div>
                         </div>
                       ))}
                     </div>
@@ -786,23 +785,23 @@ export default function DeploymentDetailPage() {
                 </div>
 
                 {deployment.error?.message && (
-                  <div className="min-w-0 rounded-3xl border border-rose-400/20 bg-rose-500/10 p-5 shadow-[0_24px_70px_rgba(0,0,0,0.28)]">
-                    <div className="flex items-center gap-2 text-rose-200">
+                  <div className="min-w-0 rounded-3xl border border-destructive bg-destructive/10 p-5 ">
+                    <div className="flex items-center gap-2 text-destructive">
                       <AlertTriangle className="h-5 w-5" />
                       <h2 className="text-lg font-semibold">Failure details</h2>
                     </div>
-                    <p className="mt-3 text-sm text-rose-100/85">{deployment.error.message}</p>
+                    <p className="mt-3 text-sm text-destructive">{deployment.error.message}</p>
                   </div>
                 )}
               </div>
             </motion.div>
           ) : (
-            <div className="mt-8 rounded-3xl border border-white/10 bg-[rgba(8,12,20,0.78)] p-10 text-center text-white/60">
+            <div className="mt-8 rounded-3xl border border-border bg-card p-10 text-center text-muted-foreground">
               Deployment not found.
             </div>
           )}
         </div>
       </main>
-    </DashboardLayout>
+    </>
   );
 }

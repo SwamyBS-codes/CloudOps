@@ -14,12 +14,12 @@ const NoRepositoriesState: React.FC = () => {
         { label: 'Refresh', onClick: () => window.location.reload(), variant: 'secondary' },
       ]}
       illustration={
-        <div className="mx-auto flex items-center justify-center gap-3 text-white/45">
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+        <div className="mx-auto flex items-center justify-center gap-3 text-muted-foreground">
+          <div className="rounded-2xl border border-border bg-secondary p-4">
             <GitBranch className="h-7 w-7" />
           </div>
           <Plus className="h-5 w-5" />
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-cyan-200">
+          <div className="rounded-2xl border border-border bg-secondary p-4 text-primary">
             <GitBranch className="h-7 w-7" />
           </div>
         </div>

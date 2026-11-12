@@ -3,7 +3,7 @@ import Skeleton from './Skeleton';
 
 const RepositoryCardSkeleton: React.FC = () => {
   return (
-    <div className="rounded-2xl border border-white/8 bg-[rgba(10,14,24,0.62)] backdrop-blur-md p-4 shadow-[0_20px_60px_rgba(2,6,23,0.35)]">
+    <div className="rounded-2xl border border-border bg-card  p-4 ">
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-center gap-3">
           <Skeleton className="h-11 w-11 rounded-xl" />

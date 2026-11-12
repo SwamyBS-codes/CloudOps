@@ -15,8 +15,8 @@ const DeploymentFailedState: React.FC = () => {
       ]}
       illustration={
         <div className="relative mx-auto flex items-center justify-center">
-          <div className="absolute h-16 w-16 rounded-full bg-rose-500/10 blur-xl" />
-          <div className="relative flex items-center gap-3 rounded-2xl border border-rose-400/15 bg-rose-500/10 px-4 py-3 text-rose-100">
+          <div className="absolute h-16 w-16 rounded-full bg-destructive/10 blur-xl" />
+          <div className="relative flex items-center gap-3 rounded-2xl border border-destructive bg-destructive/10 px-4 py-3 text-destructive">
             <FileText className="h-5 w-5" />
             <RotateCcw className="h-5 w-5" />
           </div>

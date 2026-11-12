@@ -26,8 +26,8 @@ const CloudIllustration: React.FC<{ className?: string }> = ({ className = '' })
       >
         <defs>
           <linearGradient id="g1" x1="0" x2="1">
-            <stop offset="0%" stopColor="#6C63FF" stopOpacity="0.9" />
-            <stop offset="100%" stopColor="#00D4FF" stopOpacity="0.9" />
+            <stop offset="0%" stopColor="#2458D3" stopOpacity="0.9" />
+            <stop offset="100%" stopColor="#218B60" stopOpacity="0.9" />
           </linearGradient>
           <filter id="blur" x="-20%" y="-20%" width="140%" height="140%">
             <feGaussianBlur in="SourceGraphic" stdDeviation="8" />
@@ -51,7 +51,7 @@ const CloudIllustration: React.FC<{ className?: string }> = ({ className = '' })
             cy="260"
             rx="200"
             ry="120"
-            fill="#6C63FF"
+            fill="#2458D3"
             filter="url(#blur)"
             animate={{ x: [0, -12, 0] }}
             transition={{ duration: 12, repeat: Infinity, ease: 'easeInOut' }}
@@ -62,28 +62,28 @@ const CloudIllustration: React.FC<{ className?: string }> = ({ className = '' })
         <g transform="translate(60,120)">
           {/* Repo */}
           <motion.g whileHover={{ scale: 1.03 }} transition={{ type: 'spring', stiffness: 250 }}>
-            <rect x="0" y="40" rx="12" ry="12" width="120" height="70" fill="#0b1220" stroke="#6C63FF" strokeWidth="2" />
-            <text x="60" y="85" textAnchor="middle" fontSize="12" fill="#fff">GitHub</text>
+            <rect x="0" y="40" width="120" height="70" fill="#FFFFFF" stroke="#2458D3" strokeWidth="2" />
+            <text x="60" y="85" textAnchor="middle" fontSize="12" fill="#1C2630">GitHub</text>
           </motion.g>
 
           {/* Arrow */}
-          <motion.path d="M130 75 L220 75" stroke="#ffffff66" strokeWidth="2" strokeLinecap="round" />
+          <motion.path d="M130 75 L220 75" stroke="#9AA8B8" strokeWidth="2" />
 
           {/* Build */}
           <motion.g transform="translate(220,0)" whileHover={{ scale: 1.03 }} transition={{ type: 'spring', stiffness: 250 }}>
-            <rect x="0" y="40" rx="12" ry="12" width="120" height="70" fill="#0b1220" stroke="#00D4FF" strokeWidth="2" />
-            <text x="60" y="85" textAnchor="middle" fontSize="12" fill="#fff">Docker Build</text>
+            <rect x="0" y="40" width="120" height="70" fill="#FFFFFF" stroke="#218B60" strokeWidth="2" />
+            <text x="60" y="85" textAnchor="middle" fontSize="12" fill="#1C2630">Docker Build</text>
           </motion.g>
 
-          <motion.path d="M360 75 L450 75" stroke="#ffffff66" strokeWidth="2" strokeLinecap="round" />
+          <motion.path d="M360 75 L450 75" stroke="#9AA8B8" strokeWidth="2" />
 
           {/* Deploy */}
           <motion.g transform="translate(440,0)" whileHover={{ scale: 1.03 }} transition={{ type: 'spring', stiffness: 250 }}>
-            <rect x="0" y="40" rx="12" ry="12" width="120" height="70" fill="#0b1220" stroke="#ffd166" strokeWidth="2" />
-            <text x="60" y="85" textAnchor="middle" fontSize="12" fill="#fff">Deploy to AWS</text>
+            <rect x="0" y="40" width="120" height="70" fill="#FFFFFF" stroke="#B97812" strokeWidth="2" />
+            <text x="60" y="85" textAnchor="middle" fontSize="12" fill="#1C2630">Deploy to AWS</text>
           </motion.g>
 
-          <motion.path d="M580 75 L670 75" stroke="#ffffff66" strokeWidth="2" strokeLinecap="round" />
+          <motion.path d="M580 75 L670 75" stroke="#9AA8B8" strokeWidth="2" />
 
           {/* Live */}
           <motion.g
@@ -91,14 +91,14 @@ const CloudIllustration: React.FC<{ className?: string }> = ({ className = '' })
             whileHover={{ scale: 1.03, opacity: 0 }}
             transition={{ type: 'spring', stiffness: 250 }}
           >
-            <rect x="0" y="40" rx="12" ry="12" width="120" height="70" fill="#0b1220" stroke="#7efc7e" strokeWidth="2" />
-            <text x="60" y="85" textAnchor="middle" fontSize="12" fill="#fff">Live Site</text>
+            <rect x="0" y="40" width="120" height="70" fill="#FFFFFF" stroke="#218B60" strokeWidth="2" />
+            <text x="60" y="85" textAnchor="middle" fontSize="12" fill="#1C2630">Live Site</text>
           </motion.g>
         </g>
 
         {/* Floating DevOps elements */}
-        <motion.circle cx="720" cy="80" r="6" fill="#6C63FF" animate={{ y: [0, -8, 0] }} transition={{ duration: 4, repeat: Infinity }} />
-        <motion.circle cx="60" cy="420" r="5" fill="#00D4FF" animate={{ y: [0, -6, 0] }} transition={{ duration: 5, repeat: Infinity }} />
+        <motion.circle cx="720" cy="80" r="6" fill="#2458D3" animate={{ y: [0, -8, 0] }} transition={{ duration: 4, repeat: Infinity }} />
+        <motion.circle cx="60" cy="420" r="5" fill="#218B60" animate={{ y: [0, -6, 0] }} transition={{ duration: 5, repeat: Infinity }} />
       </motion.svg>
     </div>
   );

@@ -1,5 +1,4 @@
 import React from 'react';
-import { DashboardLayout } from '@/components/layout';
 import { PageHeader } from '@/components/ui';
 import CostSummaryCards from '@/components/billing/CostSummaryCards';
 import CostBreakdownChart from '@/components/billing/CostBreakdownChart';
@@ -9,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 export default function BillingPage() {
   return (
-    <DashboardLayout>
+    <>
       <PageHeader
         title="Billing & Cost Analysis"
         description="AWS cost breakdown, trends, and optimization opportunities."
@@ -37,6 +36,6 @@ export default function BillingPage() {
           </Card>
         </div>
       </div>
-    </DashboardLayout>
+    </>
   );
 }

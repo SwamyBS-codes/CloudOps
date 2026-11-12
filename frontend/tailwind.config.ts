@@ -7,8 +7,8 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['Inter', 'Plus Jakarta Sans', ...defaultTheme.fontFamily.sans],
-        display: ['Plus Jakarta Sans', 'Inter', ...defaultTheme.fontFamily.sans],
+        sans: ['Inter', ...defaultTheme.fontFamily.sans],
+        display: ['Inter', ...defaultTheme.fontFamily.sans],
         mono: ['JetBrains Mono', ...defaultTheme.fontFamily.mono],
       },
       colors: {
@@ -20,16 +20,16 @@ const config: Config = {
         primary: {
           DEFAULT: 'hsl(var(--primary))',
           foreground: 'hsl(var(--primary-foreground))',
-          50: '#F3F0FF',
-          100: '#E8DFFE',
-          200: '#D0BCFE',
-          300: '#B8A4FD',
-          400: '#A08BFC',
-          500: '#8B73FB',
-          600: '#7C5AFF',
-          700: '#6C63FF',
-          800: '#5D52D9',
-          900: '#4A41B8',
+          50: '#EEF3FF',
+          100: '#DCE6FF',
+          200: '#B9CCFF',
+          300: '#91AEFF',
+          400: '#688DFF',
+          500: '#4172F0',
+          600: '#315FDF',
+          700: '#2458D3',
+          800: '#1E48C8',
+          900: '#183B9F',
         },
         secondary: {
           DEFAULT: 'hsl(var(--secondary))',
@@ -54,7 +54,7 @@ const config: Config = {
         accent: {
           DEFAULT: 'hsl(var(--accent))',
           foreground: 'hsl(var(--accent-foreground))',
-          500: '#00D4FF',
+          500: 'hsl(var(--accent))',
         },
         popover: {
           DEFAULT: 'hsl(var(--popover))',
@@ -69,6 +69,23 @@ const config: Config = {
           elevated: 'hsl(var(--secondary))',
           glass: 'hsl(var(--card) / 0.75)',
         },
+        chart: {
+          1: 'hsl(var(--chart-1))',
+          2: 'hsl(var(--chart-2))',
+          3: 'hsl(var(--chart-3))',
+          4: 'hsl(var(--chart-4))',
+          5: 'hsl(var(--chart-5))',
+        },
+        sidebar: {
+          DEFAULT: 'hsl(var(--sidebar))',
+          foreground: 'hsl(var(--sidebar-foreground))',
+          primary: 'hsl(var(--sidebar-primary))',
+          'primary-foreground': 'hsl(var(--sidebar-primary-foreground))',
+          accent: 'hsl(var(--sidebar-accent))',
+          'accent-foreground': 'hsl(var(--sidebar-accent-foreground))',
+          border: 'hsl(var(--sidebar-border))',
+          ring: 'hsl(var(--sidebar-ring))',
+        },
         text: {
           primary: 'hsl(var(--foreground))',
           secondary: 'hsl(var(--muted-foreground))',
@@ -77,11 +94,15 @@ const config: Config = {
         },
       },
       borderRadius: {
-        lg: 'var(--radius)',
-        md: 'calc(var(--radius) - 2px)',
-        sm: 'calc(var(--radius) - 4px)',
-        xl: 'calc(var(--radius) + 4px)',
-        '2xl': 'calc(var(--radius) + 8px)',
+        none: '0px',
+        sm: '0px',
+        DEFAULT: '0px',
+        md: '0px',
+        lg: '0px',
+        xl: '0px',
+        '2xl': '0px',
+        '3xl': '0px',
+        full: '0px',
       },
       backgroundImage: {
         'gradient-primary': 'var(--gradient-primary)',

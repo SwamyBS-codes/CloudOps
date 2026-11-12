@@ -306,8 +306,8 @@ export default function DeployProject() {
   // Helper to render the File Tree recursively
   const renderTree = (nodes: FileNode[], depth = 0) => {
     return nodes.map((node, i) => (
-      <div key={i} style={{ paddingLeft: `${depth * 12}px` }} className="flex items-center gap-2 py-1 text-xs text-white/70 hover:text-cyan-300">
-        {node.type === 'directory' ? <Folder className="w-3.5 h-3.5 text-cyan-500" /> : <File className="w-3.5 h-3.5 text-white/40" />}
+      <div key={i} style={{ paddingLeft: `${depth * 12}px` }} className="flex items-center gap-2 py-1 text-xs text-foreground hover:text-primary">
+        {node.type === 'directory' ? <Folder className="w-3.5 h-3.5 text-primary" /> : <File className="w-3.5 h-3.5 text-foreground/40" />}
         <span>{node.name}</span>
         {node.children && <div className="w-full mt-1">{renderTree(node.children, depth + 1)}</div>}
       </div>
@@ -315,30 +315,30 @@ export default function DeployProject() {
   };
 
   return (
-    <div className="min-h-screen bg-[#020617] text-white p-6 pt-24">
+    <div className="min-h-screen bg-[#020617] text-foreground p-6 pt-24">
       <div className="max-w-[1400px] mx-auto flex flex-col lg:flex-row gap-6 h-[80vh]">
         
         {/* LEFT COLUMN - WORKSPACE & CONFIG */}
         <div className="w-full lg:w-[400px] flex flex-col gap-4 h-full">
-          <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-cyan-400 hover:text-cyan-300 transition text-sm">
+          <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-primary hover:text-primary transition text-sm">
             <ArrowLeft className="w-4 h-4" /> Exit Setup
           </button>
           
           {/* File Explorer */}
-          <div className="bg-[rgba(12,16,26,0.6)] border border-white/10 rounded-xl p-4 backdrop-blur-md flex-1 flex flex-col overflow-hidden">
-            <h2 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
+          <div className="bg-card border border-border rounded-xl p-4  flex-1 flex flex-col overflow-hidden">
+            <h2 className="text-sm font-bold text-foreground mb-4 flex items-center gap-2">
               <Folder className="w-4 h-4" /> Workspace Explorer
             </h2>
             <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
               {fileTree.length > 0 ? renderTree(fileTree) : (
-                <div className="text-white/30 text-xs italic">Awaiting clone...</div>
+                <div className="text-muted-foreground text-xs italic">Awaiting clone...</div>
               )}
             </div>
           </div>
 
           {/* Configuration Form */}
           {(step === 'review' || step === 'type' || step === 'env' || step === 'dockerfile' || step === 'aws' || step === 'azure' || step === 's3-folder' || step === 's3-framework' || step === 's3-env') && (
-            <div className="bg-[rgba(12,16,26,0.6)] border border-white/10 rounded-xl p-5 backdrop-blur-md shrink-0 max-h-[50vh] overflow-y-auto">
+            <div className="bg-card border border-border rounded-xl p-5  shrink-0 max-h-[50vh] overflow-y-auto">
               {step === 'review' && applicationScan && repo && (
                 <ApplicationDeployPanel
                   scan={applicationScan}
@@ -371,12 +371,12 @@ export default function DeployProject() {
               )}
 
               {step === 'review' && !applicationScan && (
-                <div className="text-sm text-white/60">
+                <div className="text-sm text-muted-foreground">
                   <p>Scanning repository...</p>
                   <button
                     type="button"
                     onClick={() => setStep('type')}
-                    className="mt-3 text-xs text-cyan-400 hover:underline"
+                    className="mt-3 text-xs text-primary hover:underline"
                   >
                     Use advanced deployment options
                   </button>
@@ -387,7 +387,7 @@ export default function DeployProject() {
                 <button
                   type="button"
                   onClick={() => setStep('type')}
-                  className="mt-4 w-full text-center text-xs text-white/40 hover:text-white/60"
+                  className="mt-4 w-full text-center text-xs text-foreground/40 hover:text-muted-foreground"
                 >
                   Advanced deployment options (Local, AWS, Azure, S3)
                 </button>
@@ -402,8 +402,8 @@ export default function DeployProject() {
                       onClick={() => { setDeploymentType('local'); setStep('env'); }}
                       className={`flex-1 min-w-[100px] flex items-center justify-center gap-2 p-3 rounded-lg font-medium transition ${
                         deploymentType === 'local'
-                          ? 'bg-cyan-500/30 text-cyan-300 border border-cyan-500/50'
-                          : 'bg-black/40 text-white/60 border border-white/10 hover:border-white/30'
+                          ? 'bg-primary/10 text-primary border border-primary'
+                          : 'bg-secondary text-muted-foreground border border-border hover:border-border'
                       }`}
                     >
                       <Server className="w-4 h-4" /> Local
@@ -413,7 +413,7 @@ export default function DeployProject() {
                       className={`flex-1 min-w-[100px] flex items-center justify-center gap-2 p-3 rounded-lg font-medium transition ${
                         deploymentType === 'aws'
                           ? 'bg-orange-500/30 text-orange-300 border border-orange-500/50'
-                          : 'bg-black/40 text-white/60 border border-white/10 hover:border-white/30'
+                          : 'bg-secondary text-muted-foreground border border-border hover:border-border'
                       }`}
                     >
                       <Cloud className="w-4 h-4" /> AWS EC2
@@ -423,7 +423,7 @@ export default function DeployProject() {
                       className={`flex-1 min-w-[100px] flex items-center justify-center gap-2 p-3 rounded-lg font-medium transition ${
                         deploymentType === 'azure'
                           ? 'bg-blue-500/30 text-blue-300 border border-blue-500/50'
-                          : 'bg-black/40 text-white/60 border border-white/10 hover:border-white/30'
+                          : 'bg-secondary text-muted-foreground border border-border hover:border-border'
                       }`}
                     >
                       <Box className="w-4 h-4" /> Azure ACI
@@ -432,14 +432,14 @@ export default function DeployProject() {
                       onClick={() => { setDeploymentType('s3-static'); setStep('s3-folder'); }}
                       className={`flex-1 min-w-[100px] flex items-center justify-center gap-2 p-3 rounded-lg font-medium transition ${
                         deploymentType === 's3-static'
-                          ? 'bg-emerald-500/30 text-emerald-300 border border-emerald-500/50'
-                          : 'bg-black/40 text-white/60 border border-white/10 hover:border-white/30'
+                          ? 'bg-success/10 text-success border border-success'
+                          : 'bg-secondary text-muted-foreground border border-border hover:border-border'
                       }`}
                     >
                       <Globe className="w-4 h-4" /> S3 Static
                     </button>
                   </div>
-                  <p className="text-xs text-white/50 mb-4">
+                  <p className="text-xs text-muted-foreground mb-4">
                     <strong>Local:</strong> Runs on this server (localhost:4002+)<br/>
                     <strong>AWS:</strong> Runs on EC2 with public IP<br/>
                     <strong>Azure:</strong> Runs on Container Instances<br/>
@@ -454,17 +454,17 @@ export default function DeployProject() {
                   {step === 'env' ? (
                     <>
                       <h3 className="text-sm font-bold mb-3">2. Environment Secrets</h3>
-                      <input type="text" value={envPath} onChange={(e) => setEnvPath(e.target.value)} placeholder=".env path" className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-xs mb-3 focus:border-cyan-500/50 outline-none" />
-                      <textarea value={envContent} onChange={(e) => setEnvContent(e.target.value)} placeholder="API_KEY=123..." className="w-full h-24 bg-black/40 border border-white/10 rounded-lg p-2 text-xs font-mono mb-4 focus:border-cyan-500/50 outline-none" />
-                      <button onClick={() => hasDockerfile ? handleStartBuild() : setStep('dockerfile')} className="w-full bg-cyan-500/20 text-cyan-300 py-2 rounded-lg font-medium hover:bg-cyan-500/30 text-sm">
+                      <input type="text" value={envPath} onChange={(e) => setEnvPath(e.target.value)} placeholder=".env path" className="w-full bg-secondary border border-border rounded-lg p-2 text-xs mb-3 focus:border-primary outline-none" />
+                      <textarea value={envContent} onChange={(e) => setEnvContent(e.target.value)} placeholder="API_KEY=123..." className="w-full h-24 bg-secondary border border-border rounded-lg p-2 text-xs font-mono mb-4 focus:border-primary outline-none" />
+                      <button onClick={() => hasDockerfile ? handleStartBuild() : setStep('dockerfile')} className="w-full bg-primary/10 text-primary py-2 rounded-lg font-medium hover:bg-primary/90 text-sm">
                         {hasDockerfile ? '▶️ Deploy to Local' : 'Next Step'}
                       </button>
                     </>
                   ) : (
                     <>
                       <h3 className="text-sm font-bold mb-3 text-yellow-400">2. Missing Dockerfile</h3>
-                      <textarea value={dockerfileContent} onChange={(e) => setDockerfileContent(e.target.value)} placeholder="FROM node:18..." className="w-full h-32 bg-black/40 border border-white/10 rounded-lg p-2 text-xs font-mono mb-4 focus:border-yellow-500/50 outline-none" />
-                      <button onClick={handleStartBuild} disabled={!dockerfileContent} className="w-full bg-cyan-500/20 text-cyan-300 py-2 rounded-lg font-medium hover:bg-cyan-500/30 text-sm disabled:opacity-50">
+                      <textarea value={dockerfileContent} onChange={(e) => setDockerfileContent(e.target.value)} placeholder="FROM node:18..." className="w-full h-32 bg-secondary border border-border rounded-lg p-2 text-xs font-mono mb-4 focus:border-yellow-500/50 outline-none" />
+                      <button onClick={handleStartBuild} disabled={!dockerfileContent} className="w-full bg-primary/10 text-primary py-2 rounded-lg font-medium hover:bg-primary/90 text-sm disabled:opacity-50">
                         ▶️ Deploy to Local
                       </button>
                     </>
@@ -476,15 +476,15 @@ export default function DeployProject() {
               {step === 'aws' && deploymentType === 'aws' && (
                 <>
                   <h3 className="text-sm font-bold mb-4 text-orange-300">⚡ Automated AWS EC2 Deployment</h3>
-                  <p className="text-xs text-white/50 mb-4">EC2 Key Pair and Security Group will be automatically created for you.</p>
+                  <p className="text-xs text-muted-foreground mb-4">EC2 Key Pair and Security Group will be automatically created for you.</p>
                   
                   <div className="space-y-3">
                     <div>
-                      <label className="text-xs text-white/60 mb-1 block">Instance Type</label>
+                      <label className="text-xs text-muted-foreground mb-1 block">Instance Type</label>
                       <select
                         value={awsInstanceType}
                         onChange={(e) => setAwsInstanceType(e.target.value)}
-                        className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-xs focus:border-orange-500/50 outline-none"
+                        className="w-full bg-secondary border border-border rounded-lg p-2 text-xs focus:border-orange-500/50 outline-none"
                       >
                         <option value="t3.micro">t3.micro (free tier, recommended)</option>
                         <option value="t3.small">t3.small</option>
@@ -494,12 +494,12 @@ export default function DeployProject() {
                     </div>
 
                     <div>
-                      <label className="text-xs text-white/60 mb-1 block">Environment Variables (optional)</label>
+                      <label className="text-xs text-muted-foreground mb-1 block">Environment Variables (optional)</label>
                       <textarea
                         value={awsEnvironmentVars}
                         onChange={(e) => setAwsEnvironmentVars(e.target.value)}
                         placeholder="NODE_ENV=production&#10;API_KEY=xxx"
-                        className="w-full h-20 bg-black/40 border border-white/10 rounded-lg p-2 text-xs font-mono focus:border-orange-500/50 outline-none"
+                        className="w-full h-20 bg-secondary border border-border rounded-lg p-2 text-xs font-mono focus:border-orange-500/50 outline-none"
                       />
                     </div>
 
@@ -537,19 +537,19 @@ export default function DeployProject() {
               {step === 'azure' && deploymentType === 'azure' && (
                 <>
                   <h3 className="text-sm font-bold mb-4 text-blue-300">☁️ Azure Container Instance Deployment</h3>
-                  <p className="text-xs text-white/50 mb-4">Deploy your application to Azure Container Instances (ACI). Logs will stream in real-time below.</p>
+                  <p className="text-xs text-muted-foreground mb-4">Deploy your application to Azure Container Instances (ACI). Logs will stream in real-time below.</p>
                   
                   <div className="space-y-3">
                     <div>
-                      <label className="text-xs text-white/60 mb-1 block">Application Name</label>
+                      <label className="text-xs text-muted-foreground mb-1 block">Application Name</label>
                       <input
                         type="text"
                         value={azureAppName}
                         onChange={(e) => setAzureAppName(e.target.value)}
                         placeholder="my-app"
-                        className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-xs focus:border-blue-500/50 outline-none"
+                        className="w-full bg-secondary border border-border rounded-lg p-2 text-xs focus:border-blue-500/50 outline-none"
                       />
-                      <p className="text-xs text-white/40 mt-1">Must be lowercase, alphanumeric and dashes only</p>
+                      <p className="text-xs text-foreground/40 mt-1">Must be lowercase, alphanumeric and dashes only</p>
                     </div>
 
                     <button
@@ -567,31 +567,31 @@ export default function DeployProject() {
         </div>
 
         {/* RIGHT COLUMN - TERMINAL LOGS */}
-        <div className="flex-1 bg-[#0a0a0a] border border-white/10 rounded-xl overflow-hidden shadow-2xl flex flex-col h-full">
+        <div className="flex-1 bg-[#0a0a0a] border border-border rounded-xl overflow-hidden shadow-2xl flex flex-col h-full">
           {/* Progress Tracker Header */}
-          <div className="bg-[#111] px-6 py-4 border-b border-white/10 flex items-center justify-between overflow-x-auto">
+          <div className="bg-[#111] px-6 py-4 border-b border-border flex items-center justify-between overflow-x-auto">
             <div className="flex items-center gap-4">
-              <div className={`flex items-center gap-2 text-xs whitespace-nowrap ${step !== 'cloning' ? 'text-emerald-400' : 'text-cyan-400'}`}>
+              <div className={`flex items-center gap-2 text-xs whitespace-nowrap ${step !== 'cloning' ? 'text-success' : 'text-primary'}`}>
                 {step === 'cloning' ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />} Clone
               </div>
-              <div className="w-4 h-[1px] bg-white/20" />
-              <div className={`flex items-center gap-2 text-xs whitespace-nowrap ${step === 'cloning' ? 'text-white/30' : ['review', 'type', 'env', 'dockerfile', 'aws', 'azure', 's3-folder', 's3-framework', 's3-env', 'deploying', 'complete'].includes(step) ? 'text-emerald-400' : 'text-cyan-400'}`}>
-                {step === 'cloning' ? <div className="w-4 h-4 rounded-full border border-white/30" /> : ['review', 'type', 'env', 'dockerfile', 'aws', 'azure', 's3-folder', 's3-framework', 's3-env', 'deploying', 'complete'].includes(step) ? <CheckCircle2 className="w-4 h-4" /> : <Loader2 className="w-4 h-4 animate-spin" />} Configure
+              <div className="w-4 h-[1px] bg-secondary" />
+              <div className={`flex items-center gap-2 text-xs whitespace-nowrap ${step === 'cloning' ? 'text-muted-foreground' : ['review', 'type', 'env', 'dockerfile', 'aws', 'azure', 's3-folder', 's3-framework', 's3-env', 'deploying', 'complete'].includes(step) ? 'text-success' : 'text-primary'}`}>
+                {step === 'cloning' ? <div className="w-4 h-4 rounded-full border border-border" /> : ['review', 'type', 'env', 'dockerfile', 'aws', 'azure', 's3-folder', 's3-framework', 's3-env', 'deploying', 'complete'].includes(step) ? <CheckCircle2 className="w-4 h-4" /> : <Loader2 className="w-4 h-4 animate-spin" />} Configure
               </div>
-              <div className="w-4 h-[1px] bg-white/20" />
-              <div className={`flex items-center gap-2 text-xs whitespace-nowrap ${['cloning', 'review', 'type', 'env', 'dockerfile', 'aws', 'azure', 's3-folder', 's3-framework', 's3-env'].includes(step) ? 'text-white/30' : step === 'complete' ? 'text-emerald-400' : 'text-cyan-400'}`}>
-                {['cloning', 'review', 'type', 'env', 'dockerfile', 'aws', 'azure', 's3-folder', 's3-framework', 's3-env'].includes(step) ? <div className="w-4 h-4 rounded-full border border-white/30" /> : step === 'complete' ? <CheckCircle2 className="w-4 h-4" /> : <Loader2 className="w-4 h-4 animate-spin" />} Deploy
+              <div className="w-4 h-[1px] bg-secondary" />
+              <div className={`flex items-center gap-2 text-xs whitespace-nowrap ${['cloning', 'review', 'type', 'env', 'dockerfile', 'aws', 'azure', 's3-folder', 's3-framework', 's3-env'].includes(step) ? 'text-muted-foreground' : step === 'complete' ? 'text-success' : 'text-primary'}`}>
+                {['cloning', 'review', 'type', 'env', 'dockerfile', 'aws', 'azure', 's3-folder', 's3-framework', 's3-env'].includes(step) ? <div className="w-4 h-4 rounded-full border border-border" /> : step === 'complete' ? <CheckCircle2 className="w-4 h-4" /> : <Loader2 className="w-4 h-4 animate-spin" />} Deploy
               </div>
             </div>
             {step === 'complete' && (
               <div className="flex items-center gap-3 ml-4">
-                <span className="bg-emerald-500/20 text-emerald-400 px-3 py-1 rounded-full text-xs font-bold animate-pulse">LIVE</span>
+                <span className="bg-success/10 text-success px-3 py-1 rounded-full text-xs font-bold animate-pulse">LIVE</span>
                 {publicUrl && (
                   <a
                     href={publicUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="flex items-center gap-1 text-xs text-emerald-300 hover:underline"
+                    className="flex items-center gap-1 text-xs text-success hover:underline"
                   >
                     <ExternalLink className="h-3.5 w-3.5" />
                     Open S3 site
@@ -605,19 +605,19 @@ export default function DeployProject() {
           <div className="p-5 flex-1 overflow-y-auto font-mono text-[13px] leading-relaxed space-y-1 bg-[#050505]">
             {logs.map((log) => (
               <div key={log.id} className="flex gap-4">
-                <span className="text-white/20 shrink-0 select-none">[{log.time}]</span>
+                <span className="text-foreground/20 shrink-0 select-none">[{log.time}]</span>
                 <span className={`
-                  ${log.type === 'error' ? 'text-red-400' : ''}
-                  ${log.type === 'success' ? 'text-emerald-400 font-bold' : ''}
-                  ${log.type === 'system' ? 'text-cyan-400' : ''}
-                  ${log.type === 'info' ? 'text-white/70' : ''}
+                  ${log.type === 'error' ? 'text-destructive' : ''}
+                  ${log.type === 'success' ? 'text-success font-bold' : ''}
+                  ${log.type === 'system' ? 'text-primary' : ''}
+                  ${log.type === 'info' ? 'text-foreground' : ''}
                 `}>
                   {log.text}
                 </span>
               </div>
             ))}
             {step === 'deploying' && (
-              <div className="flex gap-4 text-cyan-400/50 animate-pulse mt-2">
+              <div className="flex gap-4 text-primary animate-pulse mt-2">
                 <span className="text-transparent">[{logs[logs.length-1]?.time}]</span>
                 <span>Wait...</span>
               </div>

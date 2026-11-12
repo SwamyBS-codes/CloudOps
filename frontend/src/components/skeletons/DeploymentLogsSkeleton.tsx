@@ -3,7 +3,7 @@ import Skeleton from './Skeleton';
 
 const DeploymentLogsSkeleton: React.FC = () => {
   return (
-    <div className="rounded-2xl border border-white/8 bg-[rgba(8,12,20,0.8)] p-5 shadow-[0_20px_60px_rgba(2,6,23,0.45)]">
+    <div className="rounded-2xl border border-border bg-card p-5 ">
       <div className="flex items-center justify-between gap-4">
         <div className="space-y-2">
           <Skeleton className="h-4 w-40" />
@@ -12,7 +12,7 @@ const DeploymentLogsSkeleton: React.FC = () => {
         <Skeleton className="h-9 w-36 rounded-lg" />
       </div>
 
-      <div className="mt-5 space-y-3 rounded-xl border border-emerald-400/10 bg-black/40 p-4 font-jetbrains">
+      <div className="mt-5 space-y-3 rounded-xl border border-success bg-secondary p-4 font-jetbrains">
         {[1, 2, 3, 4, 5].map((row) => (
           <div key={row} className="flex items-center gap-3">
             <Skeleton className="h-2.5 w-2.5 rounded-full" />

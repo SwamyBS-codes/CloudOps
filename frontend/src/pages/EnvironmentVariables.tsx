@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Database, Loader2, RefreshCw, Search, Eye, EyeOff, Copy, MoreHorizontal } from 'lucide-react';
-import { DashboardLayout } from '@/components/layout';
 import { deploymentService } from '@/services/auth-service';
 import { apiClient } from '@/services/api/interceptors';
 import { ENDPOINTS, generateEndpoint } from '@/services/api/endpoints';
@@ -234,17 +233,17 @@ export default function EnvironmentVariablesPage() {
   );
 
   return (
-    <DashboardLayout>
+    <>
       <main className="space-y-6">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs uppercase tracking-[0.24em] text-white/60">
+              <div className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary px-3 py-1 text-xs uppercase tracking-[0.24em] text-muted-foreground">
                 <Database className="h-3.5 w-3.5" />
                 Environment Variables
               </div>
-              <h1 className="mt-4 text-3xl font-semibold text-white sm:text-4xl">Project environment variables</h1>
-              <p className="mt-2 max-w-3xl text-sm text-white/60">
+              <h1 className="mt-4 text-3xl font-semibold text-foreground sm:text-4xl">Project environment variables</h1>
+              <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
                 View all environment variable keys grouped by project. Keys are collected from deployment records and shown without attention tags.
               </p>
             </div>
@@ -252,7 +251,7 @@ export default function EnvironmentVariablesPage() {
             <button
               type="button"
               onClick={() => void fetchDeploymentData(true)}
-              className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/85 transition hover:bg-white/10"
+              className="inline-flex items-center gap-2 rounded-xl border border-border bg-secondary px-4 py-2 text-sm text-foreground transition hover:bg-secondary"
             >
               {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
               Refresh
@@ -260,34 +259,34 @@ export default function EnvironmentVariablesPage() {
           </motion.div>
 
           <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            <div className="rounded-2xl border border-white/10 bg-[rgba(8,12,20,0.75)] p-4 shadow-[0_20px_60px_rgba(0,0,0,0.25)]">
-              <div className="text-xs uppercase tracking-[0.24em] text-white/45">Projects</div>
-              <div className="mt-3 text-3xl font-semibold text-white">{groupedProjects.length}</div>
+            <div className="rounded-2xl border border-border bg-card p-4 ">
+              <div className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Projects</div>
+              <div className="mt-3 text-3xl font-semibold text-foreground">{groupedProjects.length}</div>
             </div>
-            <div className="rounded-2xl border border-white/10 bg-[rgba(8,12,20,0.75)] p-4 shadow-[0_20px_60px_rgba(0,0,0,0.25)]">
-              <div className="text-xs uppercase tracking-[0.24em] text-white/45">Variables</div>
-              <div className="mt-3 text-3xl font-semibold text-cyan-300">{totalVariableCount}</div>
+            <div className="rounded-2xl border border-border bg-card p-4 ">
+              <div className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Variables</div>
+              <div className="mt-3 text-3xl font-semibold text-primary">{totalVariableCount}</div>
             </div>
-            <div className="rounded-2xl border border-white/10 bg-[rgba(8,12,20,0.75)] p-4 shadow-[0_20px_60px_rgba(0,0,0,0.25)]">
-              <div className="text-xs uppercase tracking-[0.24em] text-white/45">Data Source</div>
-              <div className="mt-3 text-lg font-semibold text-white/90">Deployments</div>
+            <div className="rounded-2xl border border-border bg-card p-4 ">
+              <div className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Data Source</div>
+              <div className="mt-3 text-lg font-semibold text-foreground">Deployments</div>
             </div>
           </div>
 
-          <div className="mt-6 rounded-3xl border border-white/10 bg-[rgba(8,12,20,0.78)] p-4 shadow-[0_24px_70px_rgba(0,0,0,0.28)]">
+          <div className="mt-6 rounded-3xl border border-border bg-card p-4 ">
             <div className="relative w-full lg:max-w-lg">
-              <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-white/35" />
+              <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Search projects or environment keys"
-                className="w-full rounded-2xl border border-white/10 bg-white/5 py-3 pl-11 pr-4 text-sm text-white outline-none placeholder:text-white/35 focus:border-cyan-400/40"
+                className="w-full rounded-2xl border border-border bg-secondary py-3 pl-11 pr-4 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary"
               />
             </div>
           </div>
 
           {error && (
-            <div className="mt-4 rounded-2xl border border-rose-400/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
+            <div className="mt-4 rounded-2xl border border-destructive bg-destructive/10 px-4 py-3 text-sm text-destructive">
               {error}
             </div>
           )}
@@ -295,11 +294,11 @@ export default function EnvironmentVariablesPage() {
           {loading ? (
             <div className="mt-8 grid gap-4">
               {[...Array(3)].map((_, index) => (
-                <div key={index} className="h-44 animate-pulse rounded-3xl border border-white/10 bg-white/5" />
+                <div key={index} className="h-44 animate-pulse rounded-3xl border border-border bg-secondary" />
               ))}
             </div>
           ) : filteredProjects.length === 0 ? (
-            <div className="mt-8 rounded-3xl border border-white/10 bg-[rgba(8,12,20,0.78)] p-10 text-center text-white/60">
+            <div className="mt-8 rounded-3xl border border-border bg-card p-10 text-center text-muted-foreground">
               No environment variables found for your projects.
             </div>
           ) : (
@@ -315,22 +314,22 @@ export default function EnvironmentVariablesPage() {
                     key={project.projectName}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="rounded-3xl border border-white/10 bg-[rgba(8,12,20,0.78)] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.28)]"
+                    className="rounded-3xl border border-border bg-card p-5 "
                   >
                     <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                       <div className="flex items-center gap-3">
-                        <h2 className="text-xl font-semibold text-white">{project.projectName}</h2>
-                        <span className="rounded-full bg-white/10 px-2.5 py-1 text-xs text-white/70">
+                        <h2 className="text-xl font-semibold text-foreground">{project.projectName}</h2>
+                        <span className="rounded-full bg-secondary px-2.5 py-1 text-xs text-foreground">
                           {project.variables.length}
                         </span>
                       </div>
-                      <div className="text-sm text-white/50">Updated {formatShortDate(project.updatedAt)}</div>
+                      <div className="text-sm text-muted-foreground">Updated {formatShortDate(project.updatedAt)}</div>
                     </div>
 
-                    <div className="overflow-x-auto rounded-2xl border border-white/8">
+                    <div className="overflow-x-auto rounded-2xl border border-border">
                       <table className="w-full min-w-[760px]">
                         <thead>
-                          <tr className="bg-white/5 text-left text-xs uppercase tracking-[0.18em] text-white/45">
+                          <tr className="bg-secondary text-left text-xs uppercase tracking-[0.18em] text-muted-foreground">
                             <th className="px-4 py-3">Variable</th>
                             <th className="px-4 py-3">Environment</th>
                             <th className="px-4 py-3">Last Updated</th>
@@ -340,12 +339,12 @@ export default function EnvironmentVariablesPage() {
                           {visibleVariables.map((variable) => (
                             <tr
                               key={`${project.projectName}:${variable.key}`}
-                              className="border-t border-white/6 text-sm text-white/85 hover:bg-white/3 cursor-pointer"
+                              className="border-t border-border text-sm text-foreground hover:bg-secondary cursor-pointer"
                               onClick={() => setSelectedVar({ projectName: project.projectName, key: variable.key!, updatedAt: variable.updatedAt })}
                             >
-                              <td className="px-4 py-3 font-mono text-[13px] text-cyan-200">{variable.key}</td>
-                              <td className="px-4 py-3 text-white/70">{DEFAULT_SCOPE}</td>
-                              <td className="px-4 py-3 text-white/70">{formatShortDate(variable.updatedAt)}</td>
+                              <td className="px-4 py-3 font-mono text-[13px] text-primary">{variable.key}</td>
+                              <td className="px-4 py-3 text-foreground">{DEFAULT_SCOPE}</td>
+                              <td className="px-4 py-3 text-foreground">{formatShortDate(variable.updatedAt)}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -362,7 +361,7 @@ export default function EnvironmentVariablesPage() {
                               [project.projectName]: !isExpanded,
                             }))
                           }
-                          className="rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm text-white/80 transition hover:bg-white/10"
+                          className="rounded-full border border-border bg-secondary px-4 py-2 text-sm text-foreground transition hover:bg-secondary"
                         >
                           {isExpanded ? 'Show Less' : 'Show More'}
                         </button>
@@ -379,38 +378,38 @@ export default function EnvironmentVariablesPage() {
       {/* Variable detail modal */}
       {selectedVar && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/60" onClick={() => setSelectedVar(null)} />
+          <div className="absolute inset-0 bg-secondary" onClick={() => setSelectedVar(null)} />
           <div className="relative z-60 w-full max-w-2xl mx-4 max-h-[80vh] overflow-auto">
-            <div className="rounded-2xl bg-[rgba(8,12,20,0.92)] border border-white/10 p-6 shadow-xl">
+            <div className="rounded-2xl bg-card border border-border p-6 shadow-xl">
               <div className="flex items-center justify-between gap-4">
                 <div>
                   <div className="flex items-center gap-3">
-                    <div className="px-3 py-1 rounded bg-white/6 text-white/80 font-mono">{selectedVar.key}</div>
-                    <div className="text-sm text-white/60">All Environments</div>
+                    <div className="px-3 py-1 rounded bg-secondary text-foreground font-mono">{selectedVar.key}</div>
+                    <div className="text-sm text-muted-foreground">All Environments</div>
                   </div>
-                  <div className="mt-2 text-xs text-white/50">Added {formatShortDate(selectedVar.updatedAt)}</div>
+                  <div className="mt-2 text-xs text-muted-foreground">Added {formatShortDate(selectedVar.updatedAt)}</div>
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <button className="p-2 rounded-full bg-white/6">
-                    <MoreHorizontal className="w-4 h-4 text-white/80" />
+                  <button className="p-2 rounded-full bg-secondary">
+                    <MoreHorizontal className="w-4 h-4 text-foreground" />
                   </button>
                 </div>
               </div>
 
               <div className="mt-4">
-                <label className="block text-xs text-white/60 mb-2">Value</label>
+                <label className="block text-xs text-muted-foreground mb-2">Value</label>
                 <div className="flex items-center gap-3">
                   <input
                     type={revealValue ? 'text' : 'password'}
                     value={editingValue}
                     onChange={(e) => setEditingValue(e.target.value)}
-                    className="flex-1 rounded-lg border border-white/8 bg-white/5 px-4 py-3 font-mono text-sm text-white/80"
+                    className="flex-1 rounded-lg border border-border bg-secondary px-4 py-3 font-mono text-sm text-foreground"
                   />
                   <button
                     type="button"
                     onClick={() => setRevealValue((v) => !v)}
-                    className="p-2 rounded-lg border border-white/8 bg-white/5 text-white/80"
+                    className="p-2 rounded-lg border border-border bg-secondary text-foreground"
                     aria-label="Toggle reveal value"
                   >
                     {revealValue ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -418,7 +417,7 @@ export default function EnvironmentVariablesPage() {
                   <button
                     type="button"
                     onClick={() => editingValue && navigator.clipboard?.writeText(String(editingValue))}
-                    className="p-2 rounded-lg border border-white/8 bg-white/5 text-white/80"
+                    className="p-2 rounded-lg border border-border bg-secondary text-foreground"
                     aria-label="Copy value"
                   >
                     <Copy className="w-4 h-4" />
@@ -441,7 +440,7 @@ export default function EnvironmentVariablesPage() {
                         console.error('Failed to save env var', err);
                       }
                     }}
-                    className="rounded-lg px-4 py-2 bg-cyan-500/15 text-cyan-100"
+                    className="rounded-lg px-4 py-2 bg-primary/10 text-primary"
                   >
                     Save
                   </button>
@@ -451,6 +450,6 @@ export default function EnvironmentVariablesPage() {
           </div>
         </div>
       )}
-    </DashboardLayout>
+    </>
   );
 }

@@ -19,7 +19,6 @@ import {
   Package,
 } from 'lucide-react';
 import { formatApplicationType, formatHealthStatus } from '@/lib/application-types';
-import { DashboardLayout } from '@/components/layout';
 import { authService, deploymentService } from '@/services/auth-service';
 import {
   PageHeader,
@@ -166,7 +165,7 @@ export default function DeploymentsPage() {
   }, [deployments]);
 
   return (
-    <DashboardLayout>
+    <>
       <PageHeader
         title="Deployments"
         description="Review every deployment, inspect live status, project info, and build logs."
@@ -294,7 +293,7 @@ export default function DeploymentsPage() {
             } else if (isAzure) {
               providerBadge = { label: 'Azure', color: 'bg-sky-500/10 text-sky-400 border-sky-500/20' };
             } else if (isS3) {
-              providerBadge = { label: 'S3', color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' };
+              providerBadge = { label: 'S3', color: 'bg-success/10 text-success border-success' };
             }
 
             return (
@@ -427,6 +426,6 @@ export default function DeploymentsPage() {
           })}
         </div>
       )}
-    </DashboardLayout>
+    </>
   );
 }

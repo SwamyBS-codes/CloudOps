@@ -14,12 +14,12 @@ const NoDeploymentHistoryState: React.FC = () => {
         { label: 'View repositories', href: '/dashboard', variant: 'secondary' },
       ]}
       illustration={
-        <div className="mx-auto flex items-center justify-center gap-3 text-white/45">
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+        <div className="mx-auto flex items-center justify-center gap-3 text-muted-foreground">
+          <div className="rounded-2xl border border-border bg-secondary p-4">
             <History className="h-6 w-6" />
           </div>
           <Plus className="h-5 w-5" />
-          <div className="rounded-2xl border border-cyan-400/15 bg-cyan-500/10 p-4 text-cyan-200">
+          <div className="rounded-2xl border border-primary bg-primary/10 p-4 text-primary">
             <Rocket className="h-6 w-6" />
           </div>
         </div>

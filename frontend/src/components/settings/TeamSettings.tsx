@@ -49,13 +49,13 @@ const TeamSettings: React.FC = () => {
   };
 
   return (
-    <motion.section whileHover={{ y: -4 }} className="rounded-2xl border border-white/8 bg-[rgba(10,14,24,0.62)] backdrop-blur-md p-5 shadow-[0_20px_60px_rgba(2,6,23,0.35)]">
+    <motion.section whileHover={{ y: -4 }} className="rounded-2xl border border-border bg-card  p-5 ">
       <div className="flex items-center justify-between gap-4 mb-5">
         <div>
-          <h2 className="text-lg font-semibold text-white">Team settings</h2>
-          <p className="text-sm text-white/60">Manage workspace members and roles.</p>
+          <h2 className="text-lg font-semibold text-foreground">Team settings</h2>
+          <p className="text-sm text-muted-foreground">Manage workspace members and roles.</p>
         </div>
-        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/6 text-fuchsia-300">
+        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-secondary text-fuchsia-300">
           <Users className="h-5 w-5" />
         </div>
       </div>
@@ -64,7 +64,7 @@ const TeamSettings: React.FC = () => {
         <input
           value={teamName}
           onChange={(e) => persist(e.target.value, members)}
-          className="w-full rounded-xl border border-white/8 bg-white/5 px-4 py-3 text-white outline-none focus:border-fuchsia-400/50"
+          className="w-full rounded-xl border border-border bg-secondary px-4 py-3 text-foreground outline-none focus:border-fuchsia-400/50"
         />
 
         <div className="grid gap-3 md:grid-cols-2">
@@ -72,14 +72,14 @@ const TeamSettings: React.FC = () => {
             value={memberName}
             onChange={(e) => setMemberName(e.target.value)}
             placeholder="Member name"
-            className="w-full rounded-xl border border-white/8 bg-white/5 px-4 py-3 text-white outline-none focus:border-fuchsia-400/50"
+            className="w-full rounded-xl border border-border bg-secondary px-4 py-3 text-foreground outline-none focus:border-fuchsia-400/50"
           />
           <div className="flex gap-2">
             <input
               value={memberRole}
               onChange={(e) => setMemberRole(e.target.value)}
               placeholder="Role"
-              className="w-full rounded-xl border border-white/8 bg-white/5 px-4 py-3 text-white outline-none focus:border-fuchsia-400/50"
+              className="w-full rounded-xl border border-border bg-secondary px-4 py-3 text-foreground outline-none focus:border-fuchsia-400/50"
             />
             <button type="button" onClick={addMember} className="rounded-xl bg-fuchsia-500/15 px-4 py-3 text-sm font-medium text-fuchsia-100">
               Add
@@ -87,15 +87,15 @@ const TeamSettings: React.FC = () => {
           </div>
         </div>
 
-        <div className="space-y-2 text-sm text-white/80">
+        <div className="space-y-2 text-sm text-foreground">
           {members.map((member, index) => (
-            <div key={member.id} className="flex items-center justify-between rounded-xl border border-white/8 bg-white/5 px-4 py-3">
+            <div key={member.id} className="flex items-center justify-between rounded-xl border border-border bg-secondary px-4 py-3">
               <span>
                 {member.name} - {member.role}
               </span>
               <div className="flex items-center gap-2">
-                {index === 0 ? <Crown className="h-4 w-4 text-amber-300" /> : <UserPlus className="h-4 w-4 text-cyan-300" />}
-                <button type="button" onClick={() => removeMember(member.id)} className="rounded-lg bg-white/6 p-2 text-white/70 hover:bg-white/10" aria-label="Remove member">
+                {index === 0 ? <Crown className="h-4 w-4 text-warning" /> : <UserPlus className="h-4 w-4 text-primary" />}
+                <button type="button" onClick={() => removeMember(member.id)} className="rounded-lg bg-secondary p-2 text-foreground hover:bg-secondary" aria-label="Remove member">
                   <Trash2 className="h-4 w-4" />
                 </button>
               </div>

@@ -4,7 +4,6 @@ import { useSearchParams } from 'react-router-dom';
 import LiveProgressBar from '@/components/deployments/LiveProgressBar';
 import TerminalStream from '@/components/deployments/TerminalStream';
 import DeploymentTimeline from '@/components/deployments/DeploymentTimeline';
-import { DashboardLayout } from '@/components/layout';
 import { axiosClient } from '@/services/api/axios-client';
 
 const STEPS = [
@@ -151,23 +150,23 @@ export default function DeploymentLogsPage() {
   });
 
   return (
-    <DashboardLayout>
+    <>
       <main className="space-y-8">
         <div className="max-w-6xl mx-auto">
           <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
-            <h1 className="text-3xl font-bold text-white">Deployment Logs</h1>
-            <p className="text-white/60">Showing only real-time backend logs for this deployment.</p>
+            <h1 className="text-3xl font-bold text-foreground">Deployment Logs</h1>
+            <p className="text-muted-foreground">Showing only real-time backend logs for this deployment.</p>
           </motion.div>
 
           {error && (
-            <div className="mb-4 rounded-xl border border-rose-400/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
+            <div className="mb-4 rounded-xl border border-destructive bg-destructive/10 px-4 py-3 text-sm text-destructive">
               {error}
             </div>
           )}
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 space-y-4">
-              <div className="backdrop-blur-md bg-[rgba(6,10,20,0.6)] border border-white/6 rounded-xl p-4">
+              <div className=" bg-card border border-border rounded-xl p-4">
                 <div className="flex items-center justify-between mb-4">
                   <div className="w-full">
                     <LiveProgressBar steps={STEPS} current={currentStep} progress={progress} />
@@ -176,39 +175,39 @@ export default function DeploymentLogsPage() {
                 <TerminalStream logs={renderedLogs} />
               </div>
 
-              <div className="backdrop-blur-md bg-[rgba(6,10,20,0.5)] border border-white/6 rounded-xl p-4">
-                <h3 className="text-lg font-semibold text-white mb-3">Deployment Timeline</h3>
+              <div className=" bg-card border border-border rounded-xl p-4">
+                <h3 className="text-lg font-semibold text-foreground mb-3">Deployment Timeline</h3>
                 <DeploymentTimeline steps={timeline as any} />
               </div>
             </div>
 
             <div className="space-y-4">
-              <div className="backdrop-blur-md bg-[rgba(6,10,20,0.5)] border border-white/6 rounded-xl p-4">
-                <h3 className="text-lg font-semibold text-white mb-2">Live Preview</h3>
-                <div className="text-sm text-white/70 mb-3">Live URL</div>
+              <div className=" bg-card border border-border rounded-xl p-4">
+                <h3 className="text-lg font-semibold text-foreground mb-2">Live Preview</h3>
+                <div className="text-sm text-foreground mb-3">Live URL</div>
                 <div className="flex items-center gap-2">
                   {deployment?.publicUrl ? (
-                    <a href={deployment.publicUrl} target="_blank" rel="noreferrer" className="px-3 py-2 rounded-md bg-white/6 hover:bg-white/8 truncate">
+                    <a href={deployment.publicUrl} target="_blank" rel="noreferrer" className="px-3 py-2 rounded-md bg-secondary hover:bg-secondary truncate">
                       {deployment.publicUrl}
                     </a>
                   ) : (
-                    <span className="px-3 py-2 rounded-md bg-white/6 text-white/60">Not available yet</span>
+                    <span className="px-3 py-2 rounded-md bg-secondary text-muted-foreground">Not available yet</span>
                   )}
                 </div>
               </div>
 
-              <div className="backdrop-blur-md bg-[rgba(6,10,20,0.5)] border border-white/6 rounded-xl p-4">
-                <h3 className="text-lg font-semibold text-white mb-2">Status</h3>
-                <div className="text-sm text-white/70 mb-2">{loading ? 'Loading...' : deployment?.status || 'Unknown'}</div>
-                <div className="text-xs text-white/60">Phase: {deployment?.phase || 'N/A'}</div>
+              <div className=" bg-card border border-border rounded-xl p-4">
+                <h3 className="text-lg font-semibold text-foreground mb-2">Status</h3>
+                <div className="text-sm text-foreground mb-2">{loading ? 'Loading...' : deployment?.status || 'Unknown'}</div>
+                <div className="text-xs text-muted-foreground">Phase: {deployment?.phase || 'N/A'}</div>
                 {deployment?.error?.message && (
-                  <div className="mt-2 text-xs text-rose-300">{deployment.error.message}</div>
+                  <div className="mt-2 text-xs text-destructive">{deployment.error.message}</div>
                 )}
               </div>
             </div>
           </div>
         </div>
       </main>
-    </DashboardLayout>
+    </>
   );
 }

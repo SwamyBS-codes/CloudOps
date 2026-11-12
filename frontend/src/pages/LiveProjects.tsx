@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import { DashboardLayout } from '@/components/layout';
 import { motion } from 'framer-motion';
 
 type DeployedProject = {
@@ -18,19 +17,19 @@ const DeployedProjectCard: React.FC<{ project: DeployedProject }> = ({ project }
     <>
       <div className="flex items-start justify-between gap-4">
         <div>
-          <div className="text-sm uppercase tracking-[0.16em] text-cyan-300/70">Live Project</div>
-          <h3 className="mt-2 text-lg font-semibold text-white">{project.name}</h3>
-          <p className="mt-1 text-sm text-white/60">{project.fullName}</p>
+          <div className="text-sm uppercase tracking-[0.16em] text-primary">Live Project</div>
+          <h3 className="mt-2 text-lg font-semibold text-foreground">{project.name}</h3>
+          <p className="mt-1 text-sm text-muted-foreground">{project.fullName}</p>
         </div>
 
-        <div className="rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-medium text-emerald-200">
+        <div className="rounded-full bg-success/10 px-3 py-1 text-xs font-medium text-success">
           Deployed
         </div>
       </div>
 
-      <div className="mt-4 flex flex-wrap items-center gap-3 text-xs text-white/60">
-        <span className="rounded-full bg-white/5 px-3 py-1">{project.language || 'Repository'}</span>
-        <span className="rounded-full bg-white/5 px-3 py-1">{project.deployedAt ? new Date(project.deployedAt).toLocaleString() : 'Just now'}</span>
+      <div className="mt-4 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+        <span className="rounded-full bg-secondary px-3 py-1">{project.language || 'Repository'}</span>
+        <span className="rounded-full bg-secondary px-3 py-1">{project.deployedAt ? new Date(project.deployedAt).toLocaleString() : 'Just now'}</span>
       </div>
     </>
   );
@@ -44,10 +43,10 @@ const DeployedProjectCard: React.FC<{ project: DeployedProject }> = ({ project }
         target="_blank"
         rel="noreferrer"
         aria-label={`Open live project ${project.name}`}
-        className="block rounded-2xl border border-white/10 bg-[rgba(12,16,26,0.72)] p-5 shadow-[0_20px_60px_rgba(2,6,23,0.35)] transition hover:border-cyan-300/40"
+        className="block rounded-2xl border border-border bg-card p-5  transition hover:border-primary"
       >
         {content}
-        <div className="mt-4 text-xs text-cyan-200">Open live link in new tab</div>
+        <div className="mt-4 text-xs text-primary">Open live link in new tab</div>
       </motion.a>
     );
   }
@@ -56,10 +55,10 @@ const DeployedProjectCard: React.FC<{ project: DeployedProject }> = ({ project }
     <motion.div
       layout
       whileHover={{ y: -4 }}
-      className="rounded-2xl border border-white/10 bg-[rgba(12,16,26,0.72)] p-5 shadow-[0_20px_60px_rgba(2,6,23,0.35)]"
+      className="rounded-2xl border border-border bg-card p-5 "
     >
       {content}
-      <div className="mt-4 text-xs text-white/45">Live link unavailable</div>
+      <div className="mt-4 text-xs text-muted-foreground">Live link unavailable</div>
     </motion.div>
   );
 };
@@ -89,7 +88,7 @@ export default function LiveProjectsPage() {
   }, []);
 
   return (
-    <DashboardLayout>
+    <>
       <main className="space-y-10">
         <div className="max-w-7xl mx-auto">
           <motion.div
@@ -109,12 +108,12 @@ export default function LiveProjectsPage() {
               ))}
             </div>
           ) : (
-            <div className="rounded-2xl border border-dashed border-white/10 bg-white/5 px-6 py-8 text-center text-text-secondary">
+            <div className="rounded-2xl border border-dashed border-border bg-secondary px-6 py-8 text-center text-text-secondary">
               No live project.
             </div>
           )}
         </div>
       </main>
-    </DashboardLayout>
+    </>
   );
 }

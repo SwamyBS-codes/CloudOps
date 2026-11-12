@@ -260,11 +260,11 @@ const DeploymentPipelineVisualization: React.FC<DeploymentPipelineVisualizationP
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
-            className="bg-slate-800/30 border border-slate-700/50 rounded-lg lg:rounded-xl p-6 backdrop-blur-sm"
+            className="bg-secondary border border-border rounded-lg lg:rounded-xl p-6 "
           >
             {/* Desktop: Horizontal Pipeline */}
             <div className="hidden lg:flex flex-col">
-              <h2 className="text-lg font-bold text-white mb-8">
+              <h2 className="text-lg font-bold text-foreground mb-8">
                 Deployment Pipeline
               </h2>
               <div className="flex items-center justify-between gap-2">
@@ -286,7 +286,7 @@ const DeploymentPipelineVisualization: React.FC<DeploymentPipelineVisualizationP
 
             {/* Mobile: Vertical Pipeline */}
             <div className="lg:hidden flex flex-col">
-              <h2 className="text-lg font-bold text-white mb-6">
+              <h2 className="text-lg font-bold text-foreground mb-6">
                 Deployment Pipeline
               </h2>
               <div className="flex flex-col items-center gap-0">
@@ -343,27 +343,27 @@ const DeploymentPipelineVisualization: React.FC<DeploymentPipelineVisualizationP
         transition={{ delay: 0.4 }}
         className="grid grid-cols-2 md:grid-cols-3 gap-4 text-center"
       >
-        <div className="bg-slate-800/30 border border-slate-700/50 rounded-lg p-4">
-          <p className="text-xs text-slate-400 uppercase tracking-wider mb-1">
+        <div className="bg-secondary border border-border rounded-lg p-4">
+          <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
             Status
           </p>
-          <p className="text-sm font-semibold text-white capitalize">
+          <p className="text-sm font-semibold text-foreground capitalize">
             {status === 'in-progress' ? '🔄 In Progress' : status}
           </p>
         </div>
-        <div className="bg-slate-800/30 border border-slate-700/50 rounded-lg p-4">
-          <p className="text-xs text-slate-400 uppercase tracking-wider mb-1">
+        <div className="bg-secondary border border-border rounded-lg p-4">
+          <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
             Completed
           </p>
-          <p className="text-sm font-semibold text-emerald-400">
+          <p className="text-sm font-semibold text-success">
             {completedStages}/{stages.length} stages
           </p>
         </div>
-        <div className="bg-slate-800/30 border border-slate-700/50 rounded-lg p-4">
-          <p className="text-xs text-slate-400 uppercase tracking-wider mb-1">
+        <div className="bg-secondary border border-border rounded-lg p-4">
+          <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
             Deployment ID
           </p>
-          <p className="text-sm font-mono text-cyan-400">{deploymentId}</p>
+          <p className="text-sm font-mono text-primary">{deploymentId}</p>
         </div>
       </motion.div>
 
@@ -372,7 +372,7 @@ const DeploymentPipelineVisualization: React.FC<DeploymentPipelineVisualizationP
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
         onClick={() => setIsSimulating(!isSimulating)}
-        className="mx-auto px-4 py-2 bg-slate-800/50 border border-slate-700/50 hover:border-cyan-500/50 text-slate-300 hover:text-cyan-300 rounded-lg text-sm font-medium transition-colors"
+        className="mx-auto px-4 py-2 bg-secondary border border-border hover:border-primary text-muted-foreground hover:text-primary rounded-lg text-sm font-medium transition-colors"
       >
         {isSimulating ? 'Stop Simulation' : 'Start Log Simulation'}
       </motion.button>

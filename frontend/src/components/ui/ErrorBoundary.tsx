@@ -28,7 +28,7 @@ class ErrorBoundary extends React.Component<React.PropsWithChildren<{}>, ErrorBo
       return (
         <main className="page-shell page-shell--wide py-20">
           <section className="glass-elevated p-8 rounded-3xl border border-border max-w-3xl mx-auto text-center">
-            <h1 className="text-3xl font-semibold text-white mb-4">Something went wrong</h1>
+            <h1 className="text-3xl font-semibold text-foreground mb-4">Something went wrong</h1>
             <p className="text-text-secondary mb-6">
               An unexpected error occurred. Refresh the page or try again using the button below.
             </p>

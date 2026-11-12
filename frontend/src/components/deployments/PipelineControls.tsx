@@ -49,7 +49,7 @@ const PipelineControls: React.FC<PipelineControlsProps> = ({
           whileTap="tap"
           onClick={onRetry}
           disabled={isLoading}
-          className="flex items-center gap-2 px-4 py-2.5 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/50 hover:border-amber-500 text-amber-300 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex items-center gap-2 px-4 py-2.5 bg-warning/10 hover:bg-warning/90 border border-warning hover:border-warning text-warning rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <RotateCcw className="w-4 h-4" />
           <span className="font-medium text-sm">Retry Failed Step</span>
@@ -64,7 +64,7 @@ const PipelineControls: React.FC<PipelineControlsProps> = ({
           whileTap="tap"
           onClick={onCancel}
           disabled={isLoading}
-          className="flex items-center gap-2 px-4 py-2.5 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 hover:border-red-500 text-red-300 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex items-center gap-2 px-4 py-2.5 bg-destructive/10 hover:bg-destructive/90 border border-destructive hover:border-destructive text-destructive rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <XCircle className="w-4 h-4" />
           <span className="font-medium text-sm">Cancel Deployment</span>
@@ -102,7 +102,7 @@ const PipelineControls: React.FC<PipelineControlsProps> = ({
 
       {/* Loading Indicator */}
       {isLoading && (
-        <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-800 border border-slate-700 text-slate-300 rounded-lg">
+        <div className="flex items-center gap-2 px-4 py-2.5 bg-secondary border border-border text-muted-foreground rounded-lg">
           <Loader2 className="w-4 h-4 animate-spin" />
           <span className="font-medium text-sm">Processing...</span>
         </div>
@@ -110,7 +110,7 @@ const PipelineControls: React.FC<PipelineControlsProps> = ({
 
       {/* No actions available */}
       {!canRetry && !canCancel && !onFullScreen && !canRollback && (
-        <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-800/50 border border-slate-700/50 text-slate-400 rounded-lg text-sm">
+        <div className="flex items-center gap-2 px-4 py-2.5 bg-secondary border border-border text-muted-foreground rounded-lg text-sm">
           No actions available
         </div>
       )}

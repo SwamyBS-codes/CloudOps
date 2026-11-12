@@ -14,11 +14,11 @@ const AnalyticsUnavailableState: React.FC = () => {
         { label: 'Status page', href: '/status', variant: 'secondary' },
       ]}
       illustration={
-        <div className="mx-auto flex items-center gap-3 text-amber-100/80">
-          <div className="rounded-2xl border border-amber-400/15 bg-amber-500/10 p-4">
+        <div className="mx-auto flex items-center gap-3 text-warning">
+          <div className="rounded-2xl border border-warning bg-warning/10 p-4">
             <ShieldAlert className="h-6 w-6" />
           </div>
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+          <div className="rounded-2xl border border-border bg-secondary p-4">
             <BarChart3 className="h-6 w-6" />
           </div>
           <RefreshCw className="h-5 w-5 animate-spin" />

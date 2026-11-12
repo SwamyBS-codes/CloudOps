@@ -26,26 +26,26 @@ const PipelineStage: React.FC<PipelineStageProps> = ({
   const getStatusColor = () => {
     switch (status) {
       case 'success':
-        return 'bg-emerald-500/20 border-emerald-500';
+        return 'bg-success/10 border-success';
       case 'failed':
-        return 'bg-red-500/20 border-red-500';
+        return 'bg-destructive/10 border-destructive';
       case 'in-progress':
-        return 'bg-cyan-500/20 border-cyan-500';
+        return 'bg-primary/10 border-primary';
       default:
-        return 'bg-slate-500/20 border-slate-500';
+        return 'bg-secondary border-border';
     }
   };
 
   const getIconColor = () => {
     switch (status) {
       case 'success':
-        return 'text-emerald-400';
+        return 'text-success';
       case 'failed':
-        return 'text-red-400';
+        return 'text-destructive';
       case 'in-progress':
-        return 'text-cyan-400';
+        return 'text-primary';
       default:
-        return 'text-slate-400';
+        return 'text-muted-foreground';
     }
   };
 
@@ -108,7 +108,7 @@ const PipelineStage: React.FC<PipelineStageProps> = ({
               fill="none"
               stroke="currentColor"
               strokeWidth="2"
-              className="text-slate-700"
+              className="text-foreground"
             />
             <motion.circle
               cx="32"
@@ -143,20 +143,20 @@ const PipelineStage: React.FC<PipelineStageProps> = ({
 
         {/* Stage label and status */}
         <div className="mt-3 text-center">
-          <p className="text-sm font-semibold text-white">{label}</p>
+          <p className="text-sm font-semibold text-foreground">{label}</p>
           <p className={`text-xs mt-1 capitalize ${
             status === 'success'
-              ? 'text-emerald-400'
+              ? 'text-success'
               : status === 'failed'
-              ? 'text-red-400'
+              ? 'text-destructive'
               : status === 'in-progress'
-              ? 'text-cyan-400 font-semibold'
-              : 'text-slate-400'
+              ? 'text-primary font-semibold'
+              : 'text-muted-foreground'
           }`}>
             {status === 'in-progress' ? '● In Progress' : status}
           </p>
           {timestamp && (
-            <p className="text-xs text-slate-500 mt-1">{timestamp}</p>
+            <p className="text-xs text-muted-foreground mt-1">{timestamp}</p>
           )}
         </div>
 
@@ -165,9 +165,9 @@ const PipelineStage: React.FC<PipelineStageProps> = ({
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             whileHover={{ opacity: 1, scale: 1 }}
-            className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-slate-900 border border-slate-700 rounded-lg p-2 max-w-xs pointer-events-none group-hover:pointer-events-auto z-20 hidden group-hover:block"
+            className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-secondary border border-border rounded-lg p-2 max-w-xs pointer-events-none group-hover:pointer-events-auto z-20 hidden group-hover:block"
           >
-            <p className="text-xs text-slate-300 font-mono line-clamp-3">
+            <p className="text-xs text-muted-foreground font-mono line-clamp-3">
               {logs[logs.length - 1]}
             </p>
           </motion.div>
