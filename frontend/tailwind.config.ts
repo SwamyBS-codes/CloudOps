@@ -89,8 +89,8 @@ const config: Config = {
         text: {
           primary: 'hsl(var(--foreground))',
           secondary: 'hsl(var(--muted-foreground))',
-          tertiary: 'hsl(215 20% 55%)',
-          disabled: 'hsl(215 20% 40%)',
+          tertiary: 'hsl(0 0% 55%)',
+          disabled: 'hsl(0 0% 40%)',
         },
       },
       borderRadius: {

@@ -6,8 +6,8 @@
 
 .app-header {
   @apply sticky top-0 z-[1030] border-b border-border backdrop-blur-md;
-  background: rgba(19, 26, 42, 0.6);
-  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+  background: rgba(10, 10, 10, 0.92);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 }
 
 .app-content {
@@ -16,8 +16,8 @@
 
 .app-sidebar {
   @apply w-64 border-r border-border backdrop-blur-md;
-  background: rgba(19, 26, 42, 0.6);
-  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+  background: rgba(10, 10, 10, 0.92);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 }
 
 .app-main {
@@ -26,6 +26,6 @@
 
 .app-footer {
   @apply border-t border-border py-lg text-center text-text-secondary backdrop-blur-md;
-  background: rgba(19, 26, 42, 0.6);
-  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+  background: rgba(10, 10, 10, 0.92);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 }

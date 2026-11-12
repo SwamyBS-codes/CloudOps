@@ -3,12 +3,12 @@
 .font-jetbrains { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, 'Roboto Mono', 'Courier New', monospace; }
 
 .terminal-shell {
-  background: hsl(215 27% 9%);
-  border: 1px solid hsl(215 18% 22%);
+  background: hsl(0 0% 6%);
+  border: 1px solid hsl(0 0% 18%);
   padding: 12px;
-  color: #e6eef8;
+  color: #f0f0f0;
 }
 
 .terminal-line { white-space: pre-wrap; font-size: 13px; }
 
-.copy-btn { background: hsl(215 22% 16%); }
+.copy-btn { background: hsl(0 0% 14%); }

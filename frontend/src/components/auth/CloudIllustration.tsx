@@ -41,7 +41,7 @@ const CloudIllustration: React.FC<{ className?: string }> = ({ className = '' })
             cy="180"
             rx="180"
             ry="100"
-            fill="url(#g1)"
+            fill="#FFFFFF"
             filter="url(#blur)"
             animate={{ x: [0, 16, 0] }}
             transition={{ duration: 10, repeat: Infinity, ease: 'easeInOut' }}
@@ -51,7 +51,7 @@ const CloudIllustration: React.FC<{ className?: string }> = ({ className = '' })
             cy="260"
             rx="200"
             ry="120"
-            fill="#2458D3"
+            fill="#FFFFFF"
             filter="url(#blur)"
             animate={{ x: [0, -12, 0] }}
             transition={{ duration: 12, repeat: Infinity, ease: 'easeInOut' }}
@@ -62,8 +62,8 @@ const CloudIllustration: React.FC<{ className?: string }> = ({ className = '' })
         <g transform="translate(60,120)">
           {/* Repo */}
           <motion.g whileHover={{ scale: 1.03 }} transition={{ type: 'spring', stiffness: 250 }}>
-            <rect x="0" y="40" width="120" height="70" fill="#FFFFFF" stroke="#2458D3" strokeWidth="2" />
-            <text x="60" y="85" textAnchor="middle" fontSize="12" fill="#1C2630">GitHub</text>
+            <rect x="0" y="40" width="120" height="70" fill="#101010" stroke="#2458D3" strokeWidth="2" />
+            <text x="60" y="85" textAnchor="middle" fontSize="12" fill="#F0F0F0">GitHub</text>
           </motion.g>
 
           {/* Arrow */}
@@ -71,16 +71,16 @@ const CloudIllustration: React.FC<{ className?: string }> = ({ className = '' })
 
           {/* Build */}
           <motion.g transform="translate(220,0)" whileHover={{ scale: 1.03 }} transition={{ type: 'spring', stiffness: 250 }}>
-            <rect x="0" y="40" width="120" height="70" fill="#FFFFFF" stroke="#218B60" strokeWidth="2" />
-            <text x="60" y="85" textAnchor="middle" fontSize="12" fill="#1C2630">Docker Build</text>
+            <rect x="0" y="40" width="120" height="70" fill="#101010" stroke="#218B60" strokeWidth="2" />
+            <text x="60" y="85" textAnchor="middle" fontSize="12" fill="#F0F0F0">Docker Build</text>
           </motion.g>
 
           <motion.path d="M360 75 L450 75" stroke="#9AA8B8" strokeWidth="2" />
 
           {/* Deploy */}
           <motion.g transform="translate(440,0)" whileHover={{ scale: 1.03 }} transition={{ type: 'spring', stiffness: 250 }}>
-            <rect x="0" y="40" width="120" height="70" fill="#FFFFFF" stroke="#B97812" strokeWidth="2" />
-            <text x="60" y="85" textAnchor="middle" fontSize="12" fill="#1C2630">Deploy to AWS</text>
+            <rect x="0" y="40" width="120" height="70" fill="#101010" stroke="#B97812" strokeWidth="2" />
+            <text x="60" y="85" textAnchor="middle" fontSize="12" fill="#F0F0F0">Deploy to AWS</text>
           </motion.g>
 
           <motion.path d="M580 75 L670 75" stroke="#9AA8B8" strokeWidth="2" />
@@ -91,8 +91,8 @@ const CloudIllustration: React.FC<{ className?: string }> = ({ className = '' })
             whileHover={{ scale: 1.03, opacity: 0 }}
             transition={{ type: 'spring', stiffness: 250 }}
           >
-            <rect x="0" y="40" width="120" height="70" fill="#FFFFFF" stroke="#218B60" strokeWidth="2" />
-            <text x="60" y="85" textAnchor="middle" fontSize="12" fill="#1C2630">Live Site</text>
+            <rect x="0" y="40" width="120" height="70" fill="#101010" stroke="#218B60" strokeWidth="2" />
+            <text x="60" y="85" textAnchor="middle" fontSize="12" fill="#F0F0F0">Live Site</text>
           </motion.g>
         </g>
 

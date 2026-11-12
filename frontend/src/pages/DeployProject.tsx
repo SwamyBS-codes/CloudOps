@@ -327,7 +327,7 @@ export default function DeployProject() {
   };
 
   return (
-    <div className="min-h-screen bg-[#03050A] px-4 py-6 pt-20 text-foreground sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-background px-4 py-6 pt-20 text-foreground sm:px-6 lg:px-8">
       <div className="mx-auto max-w-[1600px]">
         <header className="mb-5 flex flex-wrap items-center justify-between gap-4 border-b border-border/70 pb-4">
           <div className="flex min-w-0 items-center gap-3">
@@ -364,7 +364,7 @@ export default function DeployProject() {
         {/* LEFT COLUMN - WORKSPACE & CONFIG */}
         <div className="flex min-h-[220px] w-full flex-col gap-4 lg:h-[calc(100vh-12rem)]">
           {/* File Explorer */}
-          <div className="flex min-h-[160px] flex-1 flex-col overflow-hidden border border-border bg-[#090C12] p-4">
+          <div className="flex min-h-[160px] flex-1 flex-col overflow-hidden border border-border bg-card p-4">
             <h2 className="text-sm font-bold text-foreground mb-4 flex items-center gap-2">
               <Folder className="w-4 h-4" /> Workspace Explorer
             </h2>
@@ -377,7 +377,7 @@ export default function DeployProject() {
 
           {/* Configuration Form */}
           {(step === 'review' || step === 'type' || step === 'env' || step === 'dockerfile' || step === 'aws' || step === 'azure' || step === 's3-folder' || step === 's3-framework' || step === 's3-env') && (
-            <div className="max-h-[50vh] shrink-0 overflow-y-auto border border-border bg-[#090C12] p-5">
+            <div className="max-h-[50vh] shrink-0 overflow-y-auto border border-border bg-card p-5">
               {step === 'review' && applicationScan && repo && (
                 <ApplicationDeployPanel
                   scan={applicationScan}
@@ -607,9 +607,9 @@ export default function DeployProject() {
         </div>
 
         {/* RIGHT COLUMN - TERMINAL LOGS */}
-        <div className="flex min-h-[420px] min-w-0 flex-col overflow-hidden border border-border bg-[#07090D] lg:h-[calc(100vh-12rem)]">
+        <div className="flex min-h-[420px] min-w-0 flex-col overflow-hidden border border-border bg-card lg:h-[calc(100vh-12rem)]">
           {/* Progress Tracker Header */}
-          <div className="flex items-center justify-between gap-4 overflow-x-auto border-b border-border bg-[#0B0E13] px-4 py-4 sm:px-6">
+          <div className="flex items-center justify-between gap-4 overflow-x-auto border-b border-border bg-secondary px-4 py-4 sm:px-6">
             <div className="flex items-center gap-4">
               <div className={`flex items-center gap-2 text-xs whitespace-nowrap ${step !== 'cloning' ? 'text-success' : 'text-primary'}`}>
                 {step === 'cloning' ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />} Clone
@@ -652,7 +652,7 @@ export default function DeployProject() {
           </div>
           
           {/* The Terminal Screen */}
-          <div className="flex-1 space-y-1 overflow-y-auto bg-[#030406] p-4 font-mono text-[12px] leading-relaxed sm:p-5 sm:text-[13px]">
+          <div className="flex-1 space-y-1 overflow-y-auto bg-[#050505] p-4 font-mono text-[12px] leading-relaxed sm:p-5 sm:text-[13px]">
             {logs.length === 0 && (
               <div className="text-xs text-muted-foreground">
                 {step === 'cloning' ? 'Connecting to the repository...' : 'Deployment output will appear here.'}

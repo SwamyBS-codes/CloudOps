@@ -391,7 +391,7 @@ code {
   left: -4rem;
   height: 18rem;
   width: 18rem;
-  background: rgba(36, 88, 211, 0.14);
+  background: rgba(255, 255, 255, 0.035);
 }
 
 .app-orb--accent {
@@ -399,7 +399,7 @@ code {
   right: -5rem;
   height: 20rem;
   width: 20rem;
-  background: rgba(36, 88, 211, 0.12);
+  background: rgba(255, 255, 255, 0.025);
 }
 
 .app-orb--success {
@@ -407,7 +407,7 @@ code {
   left: 30%;
   height: 16rem;
   width: 16rem;
-  background: rgba(33, 139, 96, 0.1);
+  background: rgba(255, 255, 255, 0.02);
 }
 
 .floating-indicator {
@@ -419,7 +419,7 @@ code {
   position: absolute;
   inset: -0.25rem;
   border-radius: 0;
-  background: radial-gradient(circle, rgba(36, 88, 211, 0.18), transparent 65%);
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.08), transparent 65%);
   animation: pulse-soft 2.2s ease-in-out infinite;
   z-index: -1;
 }

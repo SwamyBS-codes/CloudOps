@@ -63,7 +63,7 @@ export default function DeployWizardModal({ repoName, repoOwner, onClose }: Depl
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-secondary  p-4">
       <motion.div 
         initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-        className="bg-[#0f1423] border border-border rounded-xl w-full max-w-2xl overflow-hidden shadow-2xl"
+        className="bg-card border border-border rounded-xl w-full max-w-2xl overflow-hidden shadow-2xl"
       >
         {/* Header */}
         <div className="flex justify-between items-center p-4 border-b border-border bg-secondary">

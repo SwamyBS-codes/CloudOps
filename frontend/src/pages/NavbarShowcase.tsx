@@ -106,7 +106,7 @@ const NavbarShowcase: React.FC = () => {
                   <motion.div
                     className="mb-4 inline-flex p-md rounded-lg"
                     style={{
-                      background: 'linear-gradient(135deg, rgba(36, 88, 211, 0.1), rgba(36, 88, 211, 0.05))',
+                      background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02))',
                       border: '1px solid var(--color-border)',
                     }}
                     whileHover={{ scale: 1.1, rotate: 5 }}

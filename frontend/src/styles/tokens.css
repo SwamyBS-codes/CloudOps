@@ -3,44 +3,44 @@
 :root {
   color-scheme: dark;
 
-  --card: 228 28% 6%;
+  --card: 0 0% 7%;
   --ring: 221 87% 58%;
-  --input: 228 14% 16%;
-  --muted: 228 20% 12%;
+  --input: 0 0% 18%;
+  --muted: 0 0% 11%;
   --accent: 221 70% 45%;
-  --border: 228 14% 16%;
+  --border: 0 0% 17%;
   --radius: 0;
   --chart-1: 221 87% 58%;
   --chart-2: 221 70% 45%;
-  --chart-3: 215 12% 62%;
-  --chart-4: 228 20% 18%;
+  --chart-3: 0 0% 62%;
+  --chart-4: 0 0% 18%;
   --chart-5: 0 0% 100%;
-  --popover: 228 28% 6%;
+  --popover: 0 0% 7%;
   --primary: 221 87% 53%;
-  --sidebar: 228 28% 6%;
-  --secondary: 228 20% 12%;
-  --background: 228 33% 3%;
-  --foreground: 210 20% 96%;
+  --sidebar: 0 0% 5%;
+  --secondary: 0 0% 11%;
+  --background: 0 0% 3%;
+  --foreground: 0 0% 96%;
   --destructive: 0 62% 45%;
   --sidebar-ring: 221 87% 58%;
-  --sidebar-accent: 228 20% 12%;
-  --sidebar-border: 228 14% 16%;
-  --card-foreground: 210 20% 96%;
+  --sidebar-accent: 0 0% 11%;
+  --sidebar-border: 0 0% 17%;
+  --card-foreground: 0 0% 96%;
   --sidebar-primary: 221 87% 53%;
-  --muted-foreground: 215 12% 62%;
+  --muted-foreground: 0 0% 64%;
   --accent-foreground: 0 0% 100%;
-  --popover-foreground: 210 20% 96%;
+  --popover-foreground: 0 0% 96%;
   --primary-foreground: 0 0% 100%;
-  --sidebar-foreground: 210 20% 96%;
-  --secondary-foreground: 210 20% 96%;
+  --sidebar-foreground: 0 0% 96%;
+  --secondary-foreground: 0 0% 96%;
   --destructive-foreground: 0 0% 100%;
-  --sidebar-accent-foreground: 210 20% 96%;
+  --sidebar-accent-foreground: 0 0% 96%;
   --sidebar-primary-foreground: 0 0% 100%;
 
   --success: 153 55% 48%;
-  --success-foreground: 228 33% 3%;
+  --success-foreground: 0 0% 3%;
   --warning: 36 90% 58%;
-  --warning-foreground: 228 33% 3%;
+  --warning-foreground: 0 0% 3%;
 
   --color-bg-primary: hsl(var(--background));
   --color-bg-secondary: hsl(var(--card));
@@ -56,9 +56,9 @@
   --color-error: hsl(var(--destructive));
   --color-text-primary: hsl(var(--foreground));
   --color-text-secondary: hsl(var(--muted-foreground));
-  --color-text-tertiary: hsl(215 12% 62%);
+  --color-text-tertiary: hsl(0 0% 62%);
   --color-border: hsl(var(--border));
-  --color-border-light: hsl(228 14% 20%);
+  --color-border-light: hsl(0 0% 22%);
   --color-border-dark: hsl(var(--border));
 
   --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.24);

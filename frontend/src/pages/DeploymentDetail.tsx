@@ -733,7 +733,7 @@ export default function DeploymentDetailPage() {
                             { label: 'Build Time', value: dockerBuildTime ? formatDuration(dockerBuildTime) : 'Pending' },
                             { label: 'Image Size', value: dockerImageSize ? `${(dockerImageSize / (1024 * 1024)).toFixed(2)} MB` : 'Pending' },
                           ].map((item) => (
-                            <div key={item.label} className="min-w-0 rounded-2xl border border-sky-400/10 bg-sky-500/5 px-4 py-3">
+                            <div key={item.label} className="min-w-0 rounded-2xl border border-border bg-secondary px-4 py-3">
                               <div className="text-[11px] uppercase tracking-[0.22em] text-sky-400/60">{item.label}</div>
                               <div className="mt-2 break-all text-sm font-medium text-sky-200">{item.value}</div>
                             </div>

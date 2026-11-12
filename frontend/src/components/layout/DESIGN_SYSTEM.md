@@ -6,15 +6,15 @@ The interface is a deployment control room: information-dense where teams monito
 
 | Role | Dark theme | Use |
 |---|---|---|
-| Canvas | `hsl(228 33% 3%)` | Application background |
-| Surface | `hsl(228 28% 6%)` | Cards, menus, and dialogs |
-| Ink | `hsl(210 20% 96%)` | Headings and primary text |
+| Canvas | `hsl(0 0% 3%)` | Application background |
+| Surface | `hsl(0 0% 7%)` | Cards, menus, and dialogs |
+| Ink | `hsl(0 0% 96%)` | Headings and primary text |
 | Primary | `hsl(221 87% 53%)` | Primary actions and active navigation |
 | Accent | `hsl(221 70% 45%)` | Secondary emphasis |
 | Success | `hsl(153 55% 48%)` | Healthy and completed states |
-| Border | `hsl(228 14% 16%)` | Panel boundaries and table separators |
+| Border | `hsl(0 0% 17%)` | Panel boundaries and table separators |
 
-The dark-only palette is adapted from [the supplied 21st.dev theme](https://21st.dev/@profitsalesorg-crypto/themes/promotor-wow-1784919270278). The theme's radius token is overridden to `0` to preserve the square-corner requirement.
+The dark-only palette uses neutral charcoal surfaces, with blue reserved for primary actions and active navigation. The radius token is `0` to preserve the square-corner requirement.
 
 Inter is used for interface and display text. JetBrains Mono is reserved for deployment identifiers, metrics, branches, and logs.
 

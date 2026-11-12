@@ -14,7 +14,7 @@
 }
 
 .navbar-scrolled {
-  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15) !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.32) !important;
   border-bottom-color: var(--color-border-light);
 }
 
@@ -35,7 +35,7 @@
   width: 40px;
   height: 40px;
   border-radius: 0;
-  background: linear-gradient(135deg, rgba(36, 88, 211, 0.1), rgba(36, 88, 211, 0.05));
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
   border: 1px solid var(--color-border);
   display: flex;
   align-items: center;
@@ -44,7 +44,7 @@
 }
 
 .logo-icon:hover {
-  background: linear-gradient(135deg, rgba(36, 88, 211, 0.2), rgba(36, 88, 211, 0.1));
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.04));
   border-color: var(--color-primary);
   box-shadow: 0 0 15px rgba(36, 88, 211, 0.2);
 }
@@ -155,7 +155,7 @@
   height: 52px;
   border-radius: 0;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  background: linear-gradient(145deg, rgba(11, 18, 32, 0.95), rgba(6, 11, 22, 0.9));
+  background: linear-gradient(145deg, rgba(12, 12, 12, 0.98), rgba(7, 7, 7, 0.96));
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.06),
     0 10px 26px rgba(0, 0, 0, 0.35);
@@ -325,11 +325,11 @@
 /* Animation for scroll effect */
 @keyframes navbarGlassEffect {
   0% {
-    background-color: rgba(11, 16, 32, 0.4);
+    background-color: rgba(8, 8, 8, 0.88);
     backdrop-filter: blur(6px);
   }
   100% {
-    background-color: rgba(11, 16, 32, 0.7);
+    background-color: rgba(12, 12, 12, 0.96);
     backdrop-filter: blur(12px);
   }
 }

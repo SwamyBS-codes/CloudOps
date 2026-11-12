@@ -312,7 +312,7 @@ export default function DeploymentsPage() {
                     key={deployment._id}
                     type="button"
                     onClick={() => navigate(`/deployments/${encodeURIComponent(deployment._id)}`)}
-                    className="group flex w-full flex-wrap items-center justify-between gap-4 border border-primary/25 bg-[#090C12] px-4 py-4 text-left transition hover:border-primary/60 hover:bg-[#0D1119] sm:px-5"
+                    className="group flex w-full flex-wrap items-center justify-between gap-4 border border-primary/25 bg-card px-4 py-4 text-left transition hover:border-primary/60 hover:bg-secondary sm:px-5"
                   >
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
@@ -363,11 +363,11 @@ export default function DeploymentsPage() {
             const isAzure = provider === 'azure' || deploymentService === 'azure';
             const isS3 = deploymentService === 's3-static' || deploymentService === 's3' || provider === 's3';
             
-            let providerBadge = { label: 'Cloud', color: 'bg-blue-500/10 text-blue-400 border-blue-500/20' };
+            let providerBadge = { label: 'Cloud', color: 'bg-secondary text-blue-400 border-border' };
             if (isAWS) {
               providerBadge = { label: 'AWS', color: 'bg-orange-500/10 text-orange-400 border-orange-500/20' };
             } else if (isAzure) {
-              providerBadge = { label: 'Azure', color: 'bg-sky-500/10 text-sky-400 border-sky-500/20' };
+              providerBadge = { label: 'Azure', color: 'bg-secondary text-sky-400 border-border' };
             } else if (isS3) {
               providerBadge = { label: 'S3', color: 'bg-success/10 text-success border-success' };
             }
