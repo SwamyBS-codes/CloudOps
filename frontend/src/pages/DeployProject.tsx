@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Loader2, Folder, File, ArrowLeft, CheckCircle2, Cloud, Server, Box, Globe, ExternalLink } from 'lucide-react';
+import { Loader2, Folder, File, ArrowLeft, CheckCircle2, Cloud, Server, Box, Globe, ExternalLink, GitBranch, Activity, ArrowUpRight } from 'lucide-react';
 import { deploymentService, type ApplicationScanResult, type SuggestedRoot } from '../services/deployment-service';
 import StaticDeployPanel from '@/components/deployments/StaticDeployPanel';
 import ApplicationDeployPanel from '@/components/deployments/ApplicationDeployPanel';
@@ -16,6 +16,7 @@ export default function DeployProject() {
 
   // Socket reference (persists across re-renders)
   const socketRef = useRef<Socket | null>(null);
+  const activeDeploymentIdRef = useRef('');
 
   // Process States
   const [step, setStep] = useState<'cloning' | 'review' | 'type' | 'env' | 'dockerfile' | 'aws' | 'azure' | 's3-folder' | 's3-framework' | 's3-env' | 'deploying' | 'complete'>('cloning');
@@ -50,6 +51,8 @@ export default function DeployProject() {
   const [logs, setLogs] = useState<{ id: number, text: string, type: string, time: string }[]>([]);
   const [currentDeploymentId, setCurrentDeploymentId] = useState('');
   const logsEndRef = useRef<HTMLDivElement>(null);
+
+  activeDeploymentIdRef.current = activeDeploymentId;
 
   const addLog = (text: string, type = 'info') => {
     const time = new Date().toLocaleTimeString([], { hour12: false });
@@ -183,8 +186,8 @@ export default function DeployProject() {
       }
 
       setStep('complete');
-      if (activeDeploymentId || data?.deploymentId) {
-        const id = data?.deploymentId || activeDeploymentId;
+      if (activeDeploymentIdRef.current || data?.deploymentId) {
+        const id = data?.deploymentId || activeDeploymentIdRef.current;
         setTimeout(() => navigate(`/deployments/${encodeURIComponent(id)}`), 2000);
       }
     });
@@ -202,7 +205,7 @@ export default function DeployProject() {
       }
       setStep('complete');
 
-      const deploymentIdToOpen = data?.deploymentId || activeDeploymentId;
+      const deploymentIdToOpen = data?.deploymentId || activeDeploymentIdRef.current;
       if (deploymentIdToOpen) {
         setCurrentDeploymentId(deploymentIdToOpen);
         setActiveDeploymentId(deploymentIdToOpen);
@@ -220,13 +223,13 @@ export default function DeployProject() {
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [deploymentType, activeDeploymentId, navigate]);
+  }, [navigate, owner, repo]);
 
   // 3. Join deployment room when deploying
   useEffect(() => {
-    if (step !== 'deploying' || !repo || !socketRef.current) return;
-    socketRef.current.emit('join-deployment', repo);
-  }, [step, repo]);
+    if (step !== 'deploying' || !activeDeploymentId || !socketRef.current) return;
+    socketRef.current.emit('join-deployment', activeDeploymentId);
+  }, [step, activeDeploymentId]);
 
   const handleStartBuild = async () => {
     setStep('deploying');
@@ -260,8 +263,9 @@ export default function DeployProject() {
         if (result.instanceId) addLog(`📍 Instance ID: ${result.instanceId}`, 'info');
         if (result.liveUrl) addLog(`🔗 Live URL: ${result.liveUrl}`, 'success');
         if (result.ecrUri) addLog(`🐳 ECR URI: ${result.ecrUri}`, 'info');
-        // Don't set step to complete here - wait for Socket.io 'deployment-complete' event
-        // which confirms the actual deployment succeeded
+        if (result.deploymentId) {
+          navigate(`/deployments/${encodeURIComponent(result.deploymentId)}`);
+        }
       } else if (deploymentType === 'azure') {
         // Azure Deployment
         addLog(`☁️  Building Docker image and pushing to Azure Container Registry...`, 'info');
@@ -274,7 +278,11 @@ export default function DeployProject() {
         addLog(`✅ Azure deployment initiated!`, 'success');
         addLog(`🆔 App Name: ${azureAppName}`, 'info');
         if (result.message) addLog(result.message, 'info');
-        // Wait for Socket.IO 'deploy:done' or 'deploy:error' events
+        if (result.deploymentId) {
+          setActiveDeploymentId(result.deploymentId);
+          socketRef.current?.emit('join-deployment', result.deploymentId);
+          navigate(`/deployments/${encodeURIComponent(result.deploymentId)}`);
+        }
       } else {
         // Local Deployment
         await deploymentService.saveFiles({
@@ -285,11 +293,15 @@ export default function DeployProject() {
         });
         addLog(`Configuration saved. Starting build engine...`, 'success');
         
-        await deploymentService.startBuild({
+        const result = await deploymentService.startBuild({
           projectId,
           repositoryName: repo!,
           repositoryOwner
         });
+        if (result.deploymentId) {
+          setActiveDeploymentId(result.deploymentId);
+          navigate(`/deployments/${encodeURIComponent(result.deploymentId)}`);
+        }
       }
     } catch (err: any) {
       addLog(`❌ Error: ${err.message}`, 'error');
@@ -315,17 +327,44 @@ export default function DeployProject() {
   };
 
   return (
-    <div className="min-h-screen bg-[#020617] text-foreground p-6 pt-24">
-      <div className="max-w-[1400px] mx-auto flex flex-col lg:flex-row gap-6 h-[80vh]">
+    <div className="min-h-screen bg-[#03050A] px-4 py-6 pt-20 text-foreground sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-[1600px]">
+        <header className="mb-5 flex flex-wrap items-center justify-between gap-4 border-b border-border/70 pb-4">
+          <div className="flex min-w-0 items-center gap-3">
+            <button
+              type="button"
+              onClick={() => step === 'deploying'
+                ? navigate(activeDeploymentId ? `/deployments/${encodeURIComponent(activeDeploymentId)}` : '/deployments')
+                : navigate(-1)}
+              className="inline-flex shrink-0 items-center gap-2 border border-border bg-card px-3 py-2 text-sm text-muted-foreground transition hover:border-primary/50 hover:text-foreground"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              {step === 'deploying' ? 'Continue in background' : 'Exit setup'}
+            </button>
+            <div className="min-w-0 border-l border-border pl-3">
+              <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                <Activity className="h-3.5 w-3.5 text-primary" />
+                Deployment workspace
+              </div>
+              <h1 className="mt-1 truncate text-base font-semibold text-foreground">
+                {owner && repo ? `${owner}/${repo}` : 'Preparing repository'}
+              </h1>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <GitBranch className="h-3.5 w-3.5" />
+            <span>main</span>
+            <span className="mx-1 h-1 w-1 bg-border" />
+            <span className="capitalize">{step === 'complete' ? 'live' : step}</span>
+          </div>
+        </header>
+
+      <div className="flex min-h-[calc(100vh-12rem)] flex-col gap-4 lg:grid lg:grid-cols-[minmax(300px,380px)_minmax(0,1fr)]">
         
         {/* LEFT COLUMN - WORKSPACE & CONFIG */}
-        <div className="w-full lg:w-[400px] flex flex-col gap-4 h-full">
-          <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-primary hover:text-primary transition text-sm">
-            <ArrowLeft className="w-4 h-4" /> Exit Setup
-          </button>
-          
+        <div className="flex min-h-[220px] w-full flex-col gap-4 lg:h-[calc(100vh-12rem)]">
           {/* File Explorer */}
-          <div className="bg-card border border-border rounded-xl p-4  flex-1 flex flex-col overflow-hidden">
+          <div className="flex min-h-[160px] flex-1 flex-col overflow-hidden border border-border bg-[#090C12] p-4">
             <h2 className="text-sm font-bold text-foreground mb-4 flex items-center gap-2">
               <Folder className="w-4 h-4" /> Workspace Explorer
             </h2>
@@ -338,7 +377,7 @@ export default function DeployProject() {
 
           {/* Configuration Form */}
           {(step === 'review' || step === 'type' || step === 'env' || step === 'dockerfile' || step === 'aws' || step === 'azure' || step === 's3-folder' || step === 's3-framework' || step === 's3-env') && (
-            <div className="bg-card border border-border rounded-xl p-5  shrink-0 max-h-[50vh] overflow-y-auto">
+            <div className="max-h-[50vh] shrink-0 overflow-y-auto border border-border bg-[#090C12] p-5">
               {step === 'review' && applicationScan && repo && (
                 <ApplicationDeployPanel
                   scan={applicationScan}
@@ -520,16 +559,17 @@ export default function DeployProject() {
                   fileTree={fileTree}
                   suggestedRoots={suggestedRoots}
                   repo={repo}
+                  repositoryUrl={repositoryUrl}
+                  repositoryOwner={repositoryOwner || owner}
+                  projectId={projectId}
                   step={step as 's3-folder' | 's3-framework' | 's3-env'}
                   setStep={setStep}
                   onDeploying={() => setStep('deploying')}
-                  onComplete={(url) => {
-                    setPublicUrl(url);
-                    saveDeployedProject(url);
-                    setStep('complete');
+                  onDeploymentStarted={(deploymentId) => {
+                    setActiveDeploymentId(deploymentId);
+                    navigate(`/deployments/${encodeURIComponent(deploymentId)}`);
                   }}
                   addLog={addLog}
-                  socketRef={socketRef}
                 />
               )}
 
@@ -567,9 +607,9 @@ export default function DeployProject() {
         </div>
 
         {/* RIGHT COLUMN - TERMINAL LOGS */}
-        <div className="flex-1 bg-[#0a0a0a] border border-border rounded-xl overflow-hidden shadow-2xl flex flex-col h-full">
+        <div className="flex min-h-[420px] min-w-0 flex-col overflow-hidden border border-border bg-[#07090D] lg:h-[calc(100vh-12rem)]">
           {/* Progress Tracker Header */}
-          <div className="bg-[#111] px-6 py-4 border-b border-border flex items-center justify-between overflow-x-auto">
+          <div className="flex items-center justify-between gap-4 overflow-x-auto border-b border-border bg-[#0B0E13] px-4 py-4 sm:px-6">
             <div className="flex items-center gap-4">
               <div className={`flex items-center gap-2 text-xs whitespace-nowrap ${step !== 'cloning' ? 'text-success' : 'text-primary'}`}>
                 {step === 'cloning' ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />} Clone
@@ -594,15 +634,30 @@ export default function DeployProject() {
                     className="flex items-center gap-1 text-xs text-success hover:underline"
                   >
                     <ExternalLink className="h-3.5 w-3.5" />
-                    Open S3 site
+                    Open live site
                   </a>
                 )}
               </div>
             )}
+            {step === 'deploying' && (
+              <button
+                type="button"
+                onClick={() => navigate(activeDeploymentId ? `/deployments/${encodeURIComponent(activeDeploymentId)}` : '/deployments')}
+                className="inline-flex shrink-0 items-center gap-2 border border-primary/40 bg-primary/10 px-3 py-2 text-xs font-medium text-primary transition hover:bg-primary/20"
+              >
+                View deployment
+                <ArrowUpRight className="h-3.5 w-3.5" />
+              </button>
+            )}
           </div>
           
           {/* The Terminal Screen */}
-          <div className="p-5 flex-1 overflow-y-auto font-mono text-[13px] leading-relaxed space-y-1 bg-[#050505]">
+          <div className="flex-1 space-y-1 overflow-y-auto bg-[#030406] p-4 font-mono text-[12px] leading-relaxed sm:p-5 sm:text-[13px]">
+            {logs.length === 0 && (
+              <div className="text-xs text-muted-foreground">
+                {step === 'cloning' ? 'Connecting to the repository...' : 'Deployment output will appear here.'}
+              </div>
+            )}
             {logs.map((log) => (
               <div key={log.id} className="flex gap-4">
                 <span className="text-foreground/20 shrink-0 select-none">[{log.time}]</span>
@@ -627,6 +682,7 @@ export default function DeployProject() {
         </div>
 
       </div>
+        </div>
     </div>
   );
 }

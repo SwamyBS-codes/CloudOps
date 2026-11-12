@@ -212,12 +212,15 @@ class DockerService {
             onStderr = null,
         } = input;
 
-        if (!contextPath || !fs.existsSync(contextPath)) {
-            throw new Error(`Build context not found: ${contextPath}`);
+        let resolvedContext = path.resolve(contextPath);
+        let resolvedDockerfile = path.resolve(dockerfilePath);
+
+        if (!fs.existsSync(resolvedContext)) {
+            throw new Error(`Build context not found: ${resolvedContext}`);
         }
 
-        if (!fs.existsSync(dockerfilePath)) {
-            throw new Error('No Dockerfile found in build context.');
+        if (!fs.existsSync(resolvedDockerfile)) {
+            throw new Error(`No Dockerfile found in build context: ${resolvedDockerfile}`);
         }
 
         // Check Docker availability before attempting build
@@ -231,13 +234,13 @@ class DockerService {
         console.log(`🐳 Starting Docker build for: ${imageName}...`);
 
         if (target && target.type === 'ssh') {
-            const remoteCommand = `cd ${quoteShellArg(target.remoteWorkspace || contextPath)} && docker build -t ${quoteShellArg(imageName)} -f Dockerfile .`;
+            const remoteCommand = `cd ${quoteShellArg(target.remoteWorkspace || resolvedContext)} && docker build -t ${quoteShellArg(imageName)} -f Dockerfile .`;
             return this.runRemoteCommand(target, remoteCommand, { onStdout, onStderr });
         }
 
         return this.runCommand(
             'docker',
-            ['build', '-t', imageName, '-f', dockerfilePath, contextPath],
+            ['build', '-t', imageName, '-f', resolvedDockerfile, resolvedContext],
             { onStdout, onStderr }
         );
     }

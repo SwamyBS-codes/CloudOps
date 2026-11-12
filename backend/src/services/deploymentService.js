@@ -9,6 +9,7 @@ const frameworkDetector = require('./frameworkDetector');
 const dockerfileGenerator = require('./dockerfileGenerator');
 const gitService = require('./gitService');
 const Deployment = require('../models/Deployment');
+const { getBuildDir } = require('../utils/pathResolver');
 
 class DeploymentService {
   /**
@@ -63,7 +64,7 @@ class DeploymentService {
    */
   async executeDeployment(deploymentId) {
     let deployment;
-    const buildDir = path.join(os.tmpdir(), `cloudops-${deploymentId}`);
+    const buildDir = path.resolve(__dirname, '../../temp', `cloudops-${deploymentId}`);
 
     try {
       deployment = await Deployment.findById(deploymentId);

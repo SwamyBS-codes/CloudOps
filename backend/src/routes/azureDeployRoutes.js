@@ -25,12 +25,27 @@ router.post('/deploy', (req, res) => {
     }
   }
 
-  // Respond immediately — deployment runs async via socket.io
-  res.status(202).json({ message: 'Azure deployment started', appName, socketId });
-
-  // Get the io instance attached to the app
   const io = req.app.get('io');
-  runAzureDeployment({ repoUrl, appName, socketId, io, userId });
+  runAzureDeployment({
+    repoUrl,
+    appName,
+    socketId,
+    io,
+    userId,
+    onStarted: (deployment) => {
+      res.status(202).json({
+        message: 'Azure deployment started',
+        appName,
+        deploymentId: deployment._id.toString(),
+        status: deployment.status,
+      });
+    },
+  }).catch((error) => {
+    console.error('[Azure] Could not start deployment:', error.message);
+    if (!res.headersSent) {
+      res.status(500).json({ error: error.message || 'Failed to start Azure deployment' });
+    }
+  });
 });
 
 module.exports = router;

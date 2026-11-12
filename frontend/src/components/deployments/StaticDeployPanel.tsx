@@ -6,7 +6,6 @@ import {
   type FrameworkDetection,
   type SuggestedRoot,
 } from '@/services/deployment-service';
-import type { Socket } from 'socket.io-client';
 
 type StaticStep = 's3-folder' | 's3-framework' | 's3-env';
 
@@ -17,12 +16,14 @@ type Props = {
   fileTree: FileNode[];
   suggestedRoots: SuggestedRoot[];
   repo: string;
+  repositoryUrl: string;
+  repositoryOwner?: string;
+  projectId?: string;
   step: StaticStep;
   setStep: (step: StaticStep) => void;
   onDeploying: () => void;
-  onComplete: (publicUrl: string) => void;
+  onDeploymentStarted: (deploymentId: string) => void;
   addLog: (text: string, type?: string) => void;
-  socketRef: React.RefObject<Socket | null>;
 };
 
 export default function StaticDeployPanel({
@@ -30,16 +31,19 @@ export default function StaticDeployPanel({
   fileTree,
   suggestedRoots,
   repo,
+  repositoryUrl,
+  repositoryOwner,
+  projectId,
   step,
   setStep,
   onDeploying,
-  onComplete,
+  onDeploymentStarted,
   addLog,
-  socketRef,
 }: Props) {
   const [rootDirectory, setRootDirectory] = useState('./');
   const [detection, setDetection] = useState<FrameworkDetection | null>(null);
   const [isDetecting, setIsDetecting] = useState(false);
+  const [isDeploying, setIsDeploying] = useState(false);
   const [buildCommand, setBuildCommand] = useState('npm run build');
   const [outputDirectory, setOutputDirectory] = useState('dist');
   const [envVars, setEnvVars] = useState<EnvVar[]>([
@@ -103,23 +107,7 @@ export default function StaticDeployPanel({
     onDeploying();
     addLog('Starting S3 static deployment...', 'system');
 
-    if (socketRef.current) {
-      socketRef.current.emit('join-deployment', repo);
-    }
-
-    const onBuildComplete = (data: { status: string; publicUrl?: string; error?: string }) => {
-      if (data.status === 'success' && data.publicUrl) {
-        addLog(`Live URL: ${data.publicUrl}`, 'success');
-        onComplete(data.publicUrl);
-      } else {
-        addLog(data.error || 'Deployment failed.', 'error');
-        setStep('s3-env');
-      }
-      socketRef.current?.off('build-complete', onBuildComplete);
-    };
-
-    socketRef.current?.on('build-complete', onBuildComplete);
-
+    setIsDeploying(true);
     try {
       const envContent = envVars
         .filter((v) => v.key.trim())
@@ -134,20 +122,32 @@ export default function StaticDeployPanel({
         deployType: 'static',
       });
 
-      await deploymentService.startStaticBuild({
+      const result = await deploymentService.deployApplication({
+        applicationType: 'frontend-website',
+        repositoryUrl,
         repositoryName: repo,
+        repositoryOwner,
+        projectId,
         clonePath,
+        primaryRoot: rootDirectory,
         rootDirectory,
         buildCommand,
         outputDirectory,
         environmentVariables,
-        deployType: 'static',
+        applicationName: repo,
       });
+
+      if (!result.deploymentId) {
+        throw new Error('The deployment was accepted without a deployment ID. Refresh Deployments to check its status.');
+      }
+
+      addLog(`Deployment queued. ID: ${result.deploymentId}`, 'success');
+      onDeploymentStarted(result.deploymentId);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Deployment failed';
       addLog(message, 'error');
       setStep('s3-env');
-      socketRef.current?.off('build-complete', onBuildComplete);
+      setIsDeploying(false);
     }
   };
 
@@ -316,10 +316,11 @@ export default function StaticDeployPanel({
           <Plus className="h-3.5 w-3.5" /> Add variable
         </button>
         <button
+          disabled={isDeploying}
           onClick={handleDeploy}
-          className="w-full bg-success/10 text-success py-2 rounded-lg font-medium hover:bg-success/90 text-sm"
+          className="w-full bg-success/10 text-success py-2 font-medium hover:bg-success/20 text-sm disabled:cursor-wait disabled:opacity-60"
         >
-          Deploy to S3
+          {isDeploying ? 'Starting deployment…' : 'Deploy to S3'}
         </button>
       </>
     );

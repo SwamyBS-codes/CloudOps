@@ -15,6 +15,7 @@ const awsDeploymentEngine = require('./awsDeploymentEngineService');
 const ec2Service = require('./aws/ec2Service');
 const { pushDeploymentLog } = require('../utils/deploymentPersistence');
 const { maskSecrets, sanitizeData } = require('../utils/logSanitizer');
+const { getBuildDir } = require('../utils/pathResolver');
 
 class DeploymentEngineService {
   constructor() {
@@ -560,7 +561,7 @@ class DeploymentEngineService {
       console.log(`📍 Repository URL: ${deployment.repositoryUrl}\n`);
 
       startedAt = Date.now();
-      buildDir = path.join(os.tmpdir(), `cloudops-${deploymentId}`);
+      buildDir = getBuildDir(`cloudops-${deploymentId}`);
       await fs.mkdir(buildDir, { recursive: true });
 
       const target = this.normalizeTarget(deployment.metadata?.target || deployment.infrastructure?.target || {});
@@ -1222,7 +1223,7 @@ class DeploymentEngineService {
 }
 
 function buildDirFromDeployment(deployment) {
-  return path.join(os.tmpdir(), `cloudops-${deployment._id.toString()}`);
+  return getBuildDir(`cloudops-${deployment._id.toString()}`);
 }
 
 module.exports = new DeploymentEngineService();

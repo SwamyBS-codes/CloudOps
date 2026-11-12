@@ -1,0 +1,5 @@
+azure-identity>=1.14.0
+azure-mgmt-containerinstance>=10.1.0
+azure-storage-blob>=12.18.3
+python-dotenv>=1.0.0
+typing-extensions>=4.8.0

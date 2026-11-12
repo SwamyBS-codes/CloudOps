@@ -11,6 +11,7 @@ const simpleGit = require('simple-git');
 const { v4: uuidv4 } = require('uuid');
 const Deployment = require('../models/Deployment');
 const { maskSecrets } = require('../utils/logSanitizer');
+const { pushDeploymentLog } = require('../utils/deploymentPersistence');
 
 const TEMP_ROOT = path.resolve(__dirname, '../../temp/azure');
 const DEFAULT_CONTAINER_PORT = 3000;
@@ -161,20 +162,26 @@ async function runAciViaPython({ deploymentId, appName, image, socketId, logLine
   let publicIp = '';
   let fqdn = '';
 
-  emitLog(io, socketId, `[Azure] Starting ACI container in ${cfg.resourceGroup}/${cfg.location}...`);
-  if (deployment) deployment.addLog('aci', 'info', `Starting ACI container in ${cfg.resourceGroup}/${cfg.location}...`, {}, 'azure');
+  await emitLog(
+    io,
+    socketId,
+    `[Azure] Starting ACI container in ${cfg.resourceGroup}/${cfg.location}...`,
+    deployment,
+    'aci'
+  );
 
+  let aciLogQueue = Promise.resolve();
   await runCommand(cfg.python, ['-m', 'orchestrator.core.aci_main'], { cwd: cfg.orchestratorCwd, env }, (line) => {
     const msg = line.trimEnd();
     if (!msg) return;
-    emitLog(io, socketId, msg);
-    if (deployment) deployment.addLog('aci', 'info', msg, {}, 'azure');
+    aciLogQueue = aciLogQueue.then(() => emitLog(io, socketId, msg, deployment, 'aci'));
     logLines.push(msg);
     const ipMatch = msg.match(/public IP:\s+(\S+)/);
     if (ipMatch) publicIp = ipMatch[1];
     const fqdnMatch = msg.match(/FQDN:\s+(\S+)/);
     if (fqdnMatch) fqdn = fqdnMatch[1];
   });
+  await aciLogQueue;
 
   return {
     containerGroup: groupName,
@@ -196,9 +203,25 @@ async function uploadArtifacts({ deploymentId, summaryPath, logsPath }) {
   );
 }
 
-function emitLog(io, socketId, message) {
+async function emitLog(io, socketId, message, deployment, source = 'azure', level = 'info') {
   const sanitizedMessage = maskSecrets(message);
   console.log(sanitizedMessage);
+  const deploymentId = deployment?._id?.toString();
+  if (deploymentId) {
+    const logEntry = await pushDeploymentLog(deploymentId, {
+      source,
+      level,
+      message: sanitizedMessage,
+      deploymentService: 'azure',
+    });
+    io?.to(`deployment:${deploymentId}`).emit('deployment-log', {
+      deploymentId,
+      source,
+      level,
+      message: sanitizedMessage,
+      timestamp: (logEntry.timestamp || new Date()).toISOString(),
+    });
+  }
   if (socketId && io) io.to(socketId).emit('deploy:log', sanitizedMessage);
 }
 
@@ -218,6 +241,7 @@ async function runAzureDeployment({
   applicationName,
   estimatedCostMonthly,
   estimatedDeployMinutes,
+  onStarted,
 }) {
   const cfg = azureConfig();
   if (!cfg.acrLoginServer) throw new Error('ACR_LOGIN_SERVER is not configured in backend .env');
@@ -246,8 +270,8 @@ async function runAzureDeployment({
       estimatedCostMonthly,
       estimatedDeployMinutes,
       healthStatus: 'checking',
-      status: 'pending',
-      phase: 'preparation',
+      status: 'building',
+      phase: 'clone',
       metadata: {
         hideInfrastructure: true,
         userFacingSummary: 'Managed container hosting',
@@ -269,14 +293,15 @@ async function runAzureDeployment({
     await deployment.save();
   } catch (dbErr) {
     console.error('[Azure] Failed to create deployment record:', dbErr);
+    throw dbErr;
   }
 
-  try {
-    emitLog(io, socketId, `[Azure] Starting deployment ${deploymentId}`);
-    if (deployment) deployment.addLog('system', 'info', `Deployment started: ${deploymentId}`, {}, 'azure');
+  onStarted?.(deployment);
 
-    emitLog(io, socketId, `[Azure] Cloning ${repoUrl}`);
-    if (deployment) deployment.addLog('system', 'info', `Cloning repository: ${repoUrl}`, {}, 'azure');
+  try {
+    await emitLog(io, socketId, `[Azure] Starting deployment ${deploymentId}`, deployment, 'system');
+
+    await emitLog(io, socketId, `[Azure] Cloning ${repoUrl}`, deployment, 'git');
 
     await safeRemove(cloneDir);
     await safeRemove(artifactsDir);
@@ -284,27 +309,27 @@ async function runAzureDeployment({
     await fs.mkdir(artifactsDir, { recursive: true });
 
     await git.clone(repoUrl, cloneDir);
-    emitLog(io, socketId, '[Azure] Repository cloned.');
-    if (deployment) deployment.addLog('git', 'success', 'Repository cloned successfully', { repoUrl }, 'azure');
+    await emitLog(io, socketId, '[Azure] Repository cloned.', deployment, 'git', 'success');
     logLines.push(`[Azure] Cloned ${repoUrl}`);
 
     const buildPlan = await ensureDockerfile(cloneDir);
-    emitLog(io, socketId, `[Azure] Dockerfile ready. Framework: ${buildPlan.framework}`);
+    await emitLog(io, socketId, `[Azure] Dockerfile ready. Framework: ${buildPlan.framework}`, deployment, 'framework');
     if (deployment) {
       deployment.framework = buildPlan.framework;
       deployment.frameworkVersion = buildPlan.frameworkVersion;
-      deployment.addLog('framework', 'info', `Framework detected: ${buildPlan.framework}`, buildPlan, 'azure');
+      await deployment.save();
     }
     logLines.push(`[Azure] Framework: ${buildPlan.framework}`);
 
     const fullImage = `${cfg.acrLoginServer}/${sanitizedName}:${deploymentId}`;
-    emitLog(io, socketId, `[Azure] Building image ${fullImage}...`);
-    if (deployment) deployment.addLog('docker', 'info', `Starting Docker build: ${fullImage}`, {}, 'azure');
+    await emitLog(io, socketId, `[Azure] Building image ${fullImage}...`, deployment, 'docker');
 
+    let buildLogQueue = Promise.resolve();
     await runCommand('docker', ['build', '-t', fullImage, '.'], { cwd: cloneDir }, (line) => {
-      emitLog(io, socketId, line);
+      buildLogQueue = buildLogQueue.then(() => emitLog(io, socketId, line, deployment, 'docker'));
       logLines.push(line);
     });
+    await buildLogQueue;
 
     if (deployment) {
       deployment.infrastructure = deployment.infrastructure || {};
@@ -312,33 +337,35 @@ async function runAzureDeployment({
       deployment.infrastructure.acr.imageUri = fullImage;
       deployment.infrastructure.acr.imageTag = deploymentId;
       deployment.infrastructure.acr.imageName = sanitizedName;
-      deployment.addLog('docker', 'success', 'Docker image built successfully', { imageUri: fullImage }, 'azure');
+      await deployment.save();
     }
 
     if (cfg.acrUsername && cfg.acrPassword) {
-      emitLog(io, socketId, '[Azure] Logging into ACR...');
-      if (deployment) deployment.addLog('acr', 'info', 'Authenticating with Azure Container Registry', {}, 'azure');
-      
+      await emitLog(io, socketId, '[Azure] Logging into ACR...', deployment, 'acr');
+
+      let loginLogQueue = Promise.resolve();
       await runCommand('docker', ['login', cfg.acrLoginServer, '-u', cfg.acrUsername, '-p', cfg.acrPassword], {}, (line) => {
-        emitLog(io, socketId, line);
+        loginLogQueue = loginLogQueue.then(() => emitLog(io, socketId, line, deployment, 'acr'));
         logLines.push(line);
       });
+      await loginLogQueue;
     }
 
-    emitLog(io, socketId, '[Azure] Pushing image to ACR...');
-    if (deployment) deployment.addLog('acr', 'info', 'Pushing image to Azure Container Registry', {}, 'azure');
+    await emitLog(io, socketId, '[Azure] Pushing image to ACR...', deployment, 'acr');
 
+    let pushLogQueue = Promise.resolve();
     await runCommand('docker', ['push', fullImage], {}, (line) => {
-      emitLog(io, socketId, line);
+      pushLogQueue = pushLogQueue.then(() => emitLog(io, socketId, line, deployment, 'acr'));
       logLines.push(line);
     });
+    await pushLogQueue;
 
-    if (deployment) deployment.addLog('acr', 'success', 'Image pushed to ACR successfully', { imageUri: fullImage }, 'azure');
+    await emitLog(io, socketId, 'Image pushed to ACR successfully', deployment, 'acr', 'success');
 
     const aciResult = await runAciViaPython({ deploymentId, appName: sanitizedName, image: fullImage, socketId, logLines, io, deployment });
 
     const appUrl = aciResult.accessUrl || `http://${aciResult.publicIp}`;
-    emitLog(io, socketId, `[Azure] Container running at: ${appUrl}`);
+    await emitLog(io, socketId, `[Azure] Container running at: ${appUrl}`, deployment, 'aci', 'success');
 
     if (deployment) {
       deployment.infrastructure = deployment.infrastructure || {};
@@ -355,7 +382,6 @@ async function runAzureDeployment({
       deployment.status = 'success';
       deployment.phase = 'complete';
       deployment.completedAt = new Date();
-      deployment.addLog('aci', 'success', `Container running at: ${appUrl}`, { url: appUrl }, 'azure');
     }
 
     const summary = {
@@ -369,12 +395,11 @@ async function runAzureDeployment({
     await fs.writeFile(summaryPath, JSON.stringify(summary, null, 2) + '\n', 'utf8');
     await fs.writeFile(logsPath, JSON.stringify({ deploymentId, logs: logLines }, null, 2) + '\n', 'utf8');
 
-    emitLog(io, socketId, '[Azure] Uploading artifacts to Azure Blob...');
-    if (deployment) deployment.addLog('system', 'info', 'Uploading deployment artifacts', {}, 'azure');
+    await emitLog(io, socketId, '[Azure] Uploading artifacts to Azure Blob...', deployment, 'system');
 
     await uploadArtifacts({ deploymentId, summaryPath, logsPath });
 
-    emitLog(io, socketId, `[Azure] Deployment complete! App URL: ${appUrl}`);
+    await emitLog(io, socketId, `[Azure] Deployment complete! App URL: ${appUrl}`, deployment, 'system', 'success');
     if (deployment) {
       await deployment.save();
     }
@@ -387,13 +412,12 @@ async function runAzureDeployment({
     }
   } catch (error) {
     const msg = error?.message || String(error);
-    emitLog(io, socketId, `[Azure] Deployment failed: ${msg}`);
+    await emitLog(io, socketId, `[Azure] Deployment failed: ${msg}`, deployment, 'system', 'error');
     if (deployment) {
       deployment.status = 'failed';
       deployment.phase = 'complete';
       deployment.completedAt = new Date();
       deployment.failureReason = msg;
-      deployment.addLog('system', 'error', `Deployment failed: ${msg}`, { error: msg }, 'azure');
       await deployment.save().catch(err => console.error('[Azure] Failed to save error state:', err));
     }
     if (io && socketId) {

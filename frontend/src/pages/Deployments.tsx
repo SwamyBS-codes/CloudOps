@@ -58,6 +58,20 @@ type DeploymentRecord = {
   metadata?: Record<string, any>;
 };
 
+const ACTIVE_DEPLOYMENT_STATUSES = [
+  'pending',
+  'queued',
+  'cloning',
+  'detecting',
+  'building',
+  'pushing',
+  'deploying',
+  'running',
+];
+
+const isDeploymentActive = (deployment: DeploymentRecord) =>
+  ACTIVE_DEPLOYMENT_STATUSES.includes(deployment.status || 'pending');
+
 const formatDate = (value?: string) => {
   if (!value) return 'Unknown';
   return new Date(value).toLocaleString();
@@ -151,7 +165,10 @@ export default function DeploymentsPage() {
   const filteredDeployments = useMemo(() => {
     return deployments.filter((deployment) => {
       const matchesQuery = `${deployment.applicationName || ''} ${deployment.repositoryName || ''} ${deployment.applicationType || ''} ${deployment.repositoryUrl || ''}`.toLowerCase().includes(query.toLowerCase());
-      const matchesStatus = statusFilter === 'all' || deployment.status === statusFilter;
+      const matchesStatus =
+        statusFilter === 'all'
+        || (statusFilter === 'deploying' && isDeploymentActive(deployment))
+        || deployment.status === statusFilter;
       return matchesQuery && matchesStatus;
     });
   }, [deployments, query, statusFilter]);
@@ -163,6 +180,9 @@ export default function DeploymentsPage() {
       return acc;
     }, {});
   }, [deployments]);
+
+  const activeDeployments = filteredDeployments.filter(isDeploymentActive);
+  const historyDeployments = filteredDeployments.filter((deployment) => !isDeploymentActive(deployment));
 
   return (
     <>
@@ -222,7 +242,7 @@ export default function DeploymentsPage() {
         {[
           { label: 'Total', value: String(deployments.length), icon: Server },
           { label: 'Successful', value: String(statusCounts.success || 0), icon: CheckCircle2 },
-          { label: 'Running', value: String((statusCounts.running || 0) + (statusCounts.deploying || 0)), icon: Activity },
+          { label: 'Running', value: String(ACTIVE_DEPLOYMENT_STATUSES.reduce((count, status) => count + (statusCounts[status] || 0), 0)), icon: Activity },
           { label: 'Failed', value: String(statusCounts.failed || 0), icon: AlertTriangle },
         ].map((item, i) => (
           <MetricCard key={item.label} label={item.label} value={item.value} icon={item.icon} loading={loading} delay={i * 0.06} />
@@ -239,9 +259,9 @@ export default function DeploymentsPage() {
               icon={<Search className="h-4 w-4" />}
             />
           </div>
-          <div className="flex flex-wrap items-center gap-1 rounded-lg bg-secondary/80 p-1">
+          <div className="flex flex-wrap items-center gap-1 border border-border bg-secondary/80 p-1">
             <Filter className="ml-2 h-4 w-4 text-muted-foreground" aria-hidden />
-            {['all', 'success', 'deploying', 'running', 'failed'].map((status) => (
+            {['all', 'deploying', 'success', 'failed'].map((status) => (
               <button
                 key={status}
                 type="button"
@@ -272,8 +292,64 @@ export default function DeploymentsPage() {
           description={query || statusFilter !== 'all' ? 'Try adjusting your search or filters.' : 'Deploy a repository to see it here.'}
         />
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {filteredDeployments.map((deployment, index) => {
+        <div className="space-y-8">
+          {activeDeployments.length > 0 && (
+            <section aria-labelledby="active-deployments-heading">
+              <div className="mb-3 flex items-end justify-between gap-4">
+                <div>
+                  <h2 id="active-deployments-heading" className="text-lg font-semibold text-foreground">
+                    Deploying now
+                  </h2>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    These jobs continue on the server if you leave this page. Open any job to follow its live logs.
+                  </p>
+                </div>
+                <span className="shrink-0 font-mono text-xs text-primary">{activeDeployments.length} ACTIVE</span>
+              </div>
+              <div className="space-y-2">
+                {activeDeployments.map((deployment) => (
+                  <button
+                    key={deployment._id}
+                    type="button"
+                    onClick={() => navigate(`/deployments/${encodeURIComponent(deployment._id)}`)}
+                    className="group flex w-full flex-wrap items-center justify-between gap-4 border border-primary/25 bg-[#090C12] px-4 py-4 text-left transition hover:border-primary/60 hover:bg-[#0D1119] sm:px-5"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Activity className="h-4 w-4 text-primary" />
+                        <h3 className="truncate font-semibold text-foreground group-hover:text-primary">
+                          {deployment.applicationName || deployment.repositoryName || 'Unnamed application'}
+                        </h3>
+                        <StatusBadge status={deployment.status || 'pending'} />
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {deployment.repositoryName || deployment.repositoryUrl || 'Repository'}
+                        {' · '}
+                        {deployment.phase
+                          ? deployment.phase.replace(/[_-]/g, ' ')
+                          : 'Waiting for worker'}
+                        {' · '}
+                        {deployment.branch || 'main'}
+                      </p>
+                    </div>
+                    <span className="inline-flex shrink-0 items-center gap-2 border border-border px-3 py-2 text-xs font-medium text-foreground transition group-hover:border-primary/50">
+                      <Activity className="h-3.5 w-3.5 text-primary" />
+                      View live logs
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {historyDeployments.length > 0 && (
+            <section aria-labelledby="deployment-history-heading">
+              <h2 id="deployment-history-heading" className="mb-3 text-lg font-semibold text-foreground">
+                Recent deployments
+              </h2>
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {historyDeployments.map((deployment, index) => {
             const status = deployment.status || 'pending';
             const liveUrl = deployment.domainUrl || deployment.publicUrl || deployment.metadata?.liveUrl;
             const appName = deployment.applicationName || deployment.repositoryName || 'Unnamed application';
@@ -424,6 +500,9 @@ export default function DeploymentsPage() {
               </motion.button>
             );
           })}
+              </div>
+            </section>
+          )}
         </div>
       )}
     </>
