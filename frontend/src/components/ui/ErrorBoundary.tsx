@@ -1,11 +1,15 @@
 import React from 'react';
 
+interface ErrorBoundaryProps {
+  children?: React.ReactNode;
+}
+
 interface ErrorBoundaryState {
   hasError: boolean;
   error: Error | null;
 }
 
-class ErrorBoundary extends React.Component<React.PropsWithChildren<Record<string, never>>, ErrorBoundaryState> {
+class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
   state: ErrorBoundaryState = {
     hasError: false,
     error: null,

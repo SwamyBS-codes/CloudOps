@@ -1,4 +1,4 @@
-import React, { memo, useEffect, useState } from 'react';
+import React, { memo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import {
@@ -106,22 +106,32 @@ const Sidebar: React.FC<{
 }> = ({ collapsed = false, onCollapse, mobile = false }) => {
   const location = useLocation();
   const [hoverExpanded, setHoverExpanded] = useState(false);
-  const [openMenus, setOpenMenus] = useState<string[]>([]);
-  const isCollapsed = collapsed && !hoverExpanded && !mobile;
-
-  useEffect(() => {
-    const activeGroups = navItems
+  const [openMenus, setOpenMenus] = useState<string[]>(() =>
+    navItems
       .filter((item) => item.children?.some((child) =>
         isItemActive(child.href, location.pathname, location.search, location.hash)
       ) || (item.key === 'deployments' && location.pathname.startsWith('/deployments/')))
-      .map((item) => item.key);
-    setOpenMenus((current) => Array.from(new Set([...current, ...activeGroups])));
-  }, [location.pathname, location.search, location.hash]);
+      .map((item) => item.key)
+  );
+  const isCollapsed = collapsed && !hoverExpanded && !mobile;
 
   const toggleMenu = (key: string) => {
     setOpenMenus((current) => current.includes(key)
       ? current.filter((item) => item !== key)
       : [...current, key]);
+  };
+
+  const closeMenus = () => setOpenMenus([]);
+
+  const handleMainItemClick = (event: React.MouseEvent, item: NavItem, hasChildren: boolean) => {
+    if (hasChildren) {
+      event.preventDefault();
+      toggleMenu(item.key);
+      return;
+    }
+
+    closeMenus();
+    if (mobile) onCollapse?.(false);
   };
 
   return (
@@ -168,7 +178,7 @@ const Sidebar: React.FC<{
                     to={item.href}
                     title={isCollapsed ? item.label : undefined}
                     end={!hasChildren}
-                    onClick={() => mobile && onCollapse?.(false)}
+                    onClick={(event) => handleMainItemClick(event, item, hasChildren)}
                     className={({ isActive }) =>
                       cn(
                         'flex min-w-0 flex-1 items-center gap-3 border-l-2 px-3 py-2.5 text-sm font-medium transition-colors',
@@ -201,7 +211,6 @@ const Sidebar: React.FC<{
                       <li key={child.href}>
                         <NavLink
                           to={child.href}
-                          onClick={() => mobile && onCollapse?.(false)}
                           className={() => cn(
                             'block border-l-2 px-3 py-2 text-xs transition-colors',
                             isItemActive(child.href, location.pathname, location.search, location.hash)

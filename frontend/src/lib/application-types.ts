@@ -35,7 +35,16 @@ export type DeploymentProvider = 'aws' | 'azure' | 's3' | 'local' | 'unknown';
 type ProviderSource = {
   deploymentService?: string;
   provider?: string;
-  infrastructure?: { provider?: string; targetType?: string } | null;
+  infrastructure?: {
+    provider?: string;
+    targetType?: string;
+    aci?: any;
+    acr?: any;
+    ec2?: any;
+    s3?: any;
+  } | null;
+  publicUrl?: string;
+  domainUrl?: string;
 };
 
 /**
@@ -47,6 +56,12 @@ export function resolveDeploymentProvider(
   deployment?: ProviderSource | null
 ): DeploymentProvider {
   if (!deployment) return 'unknown';
+
+  const url = (deployment.publicUrl || deployment.domainUrl || '').toLowerCase();
+  if (url.includes('azurecontainer.io') || deployment.infrastructure?.aci || deployment.infrastructure?.acr) {
+    return 'azure';
+  }
+
   const candidates = [
     deployment.deploymentService,
     deployment.provider,

@@ -76,6 +76,27 @@ export const deploymentService = {
 };
 
 /**
+ * Project Service
+ * Handles project and environment variables API calls
+ */
+export const projectService = {
+  getAll: () =>
+    apiClient.get(ENDPOINTS.PROJECTS.LIST),
+
+  getById: (id: string) =>
+    apiClient.get(generateEndpoint(ENDPOINTS.PROJECTS.GET, { id })),
+
+  update: (id: string, data: any) =>
+    apiClient.put(generateEndpoint(ENDPOINTS.PROJECTS.UPDATE, { id }), data),
+
+  addEnvVariable: (id: string, variable: { key: string; value: string; encrypted?: boolean }) =>
+    apiClient.post(`/api/projects/${encodeURIComponent(id)}/env`, variable),
+
+  deleteEnvVariable: (id: string, key: string) =>
+    apiClient.delete(`/api/projects/${encodeURIComponent(id)}/env/${encodeURIComponent(key)}`),
+};
+
+/**
  * Cost Service
  * Handles cost prediction and tracking API calls
  */

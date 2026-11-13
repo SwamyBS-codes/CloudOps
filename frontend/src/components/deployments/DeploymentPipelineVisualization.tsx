@@ -11,11 +11,156 @@ import {
   CheckCircle2,
   AlertTriangle,
   LucideIcon,
+  Play,
+  RotateCcw,
+  Maximize2,
+  XCircle,
+  Terminal,
 } from 'lucide-react';
-import PipelineStage from './PipelineStage';
-import DeploymentHeader from './DeploymentHeader';
-import LiveLogsPanel from './LiveLogsPanel';
-import PipelineControls from './PipelineControls';
+
+const PipelineStage: React.FC<{
+  stage: number;
+  totalStages: number;
+  label: string;
+  status: string;
+  icon: LucideIcon;
+  timestamp?: string;
+  logs?: string[];
+  isLast: boolean;
+}> = ({ label, status, icon: Icon, isLast }) => {
+  const isDone = status === 'success';
+  const isInProgress = status === 'in-progress';
+  const isFailed = status === 'failed';
+
+  return (
+    <div className="flex items-center gap-2">
+      <div
+        className={`flex h-10 w-10 items-center justify-center rounded-xl border text-xs font-medium transition ${
+          isDone
+            ? 'border-emerald-400/40 bg-emerald-400/10 text-emerald-400'
+            : isInProgress
+              ? 'border-primary/40 bg-primary/10 text-primary animate-pulse'
+              : isFailed
+                ? 'border-destructive/40 bg-destructive/10 text-destructive'
+                : 'border-border bg-secondary text-muted-foreground'
+        }`}
+      >
+        <Icon className="h-4 w-4" />
+      </div>
+      <div className="min-w-[80px]">
+        <div className="text-xs font-medium text-foreground">{label}</div>
+        <div className="text-[10px] capitalize text-muted-foreground">{status}</div>
+      </div>
+      {!isLast && <div className="h-0.5 w-6 bg-border" />}
+    </div>
+  );
+};
+
+const DeploymentHeader: React.FC<any> = ({
+  deploymentName,
+  repoName,
+  branch,
+  status,
+  progress,
+  deploymentUrl,
+}) => (
+  <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
+    <div className="flex flex-wrap items-center justify-between gap-4">
+      <div>
+        <h1 className="text-xl font-bold text-foreground">{deploymentName || repoName || 'Deployment Pipeline'}</h1>
+        <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+          <span>Branch: {branch || 'main'}</span>
+          <span>•</span>
+          <span className="capitalize">{status}</span>
+          {deploymentUrl && (
+            <>
+              <span>•</span>
+              <a href={deploymentUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline">
+                {deploymentUrl}
+              </a>
+            </>
+          )}
+        </div>
+      </div>
+      {typeof progress === 'number' && (
+        <div className="w-36 text-right">
+          <div className="text-xs font-semibold text-foreground">{Math.round(progress)}%</div>
+          <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-secondary">
+            <div className="h-full bg-primary transition-all duration-300" style={{ width: `${progress}%` }} />
+          </div>
+        </div>
+      )}
+    </div>
+  </div>
+);
+
+const LiveLogsPanel: React.FC<{
+  logs?: any[];
+  isLoading?: boolean;
+  onFullScreen?: () => void;
+  onClear?: () => void;
+}> = ({ logs = [], onClear }) => (
+  <div className="flex flex-col h-[400px] rounded-2xl border border-border bg-[#0C0C0C] p-4 font-mono text-xs text-neutral-300 shadow-inner">
+    <div className="flex items-center justify-between border-b border-white/10 pb-2 mb-3">
+      <div className="flex items-center gap-2 text-xs text-neutral-400">
+        <Terminal className="h-3.5 w-3.5" />
+        <span>Live Logs</span>
+      </div>
+      {onClear && (
+        <button type="button" onClick={onClear} className="text-[11px] text-neutral-500 hover:text-white">
+          Clear
+        </button>
+      )}
+    </div>
+    <div className="flex-1 overflow-y-auto space-y-1">
+      {logs.map((log: any, idx: number) => (
+        <div key={idx} className="leading-relaxed">
+          <span className="text-neutral-600 mr-2">[{log.timestamp || `${idx}`}]</span>
+          <span className={log.level === 'error' ? 'text-destructive' : log.level === 'success' ? 'text-emerald-400' : 'text-neutral-300'}>
+            {log.message}
+          </span>
+        </div>
+      ))}
+      {logs.length === 0 && (
+        <div className="text-neutral-600 text-center py-10">No log output yet...</div>
+      )}
+    </div>
+  </div>
+);
+
+const PipelineControls: React.FC<{
+  status?: string;
+  onRetry?: () => void;
+  onCancel?: () => void;
+  onFullScreen?: () => void;
+  onRollback?: () => void;
+  isLoading?: boolean;
+}> = ({ onRetry, onCancel, isLoading }) => (
+  <div className="flex flex-wrap items-center gap-2">
+    {onRetry && (
+      <button
+        type="button"
+        disabled={isLoading}
+        onClick={onRetry}
+        className="inline-flex items-center gap-1.5 rounded-xl border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/20 disabled:opacity-50"
+      >
+        <RotateCcw className="h-3.5 w-3.5" />
+        Retry
+      </button>
+    )}
+    {onCancel && (
+      <button
+        type="button"
+        disabled={isLoading}
+        onClick={onCancel}
+        className="inline-flex items-center gap-1.5 rounded-xl border border-destructive/40 bg-destructive/10 px-3 py-1.5 text-xs font-medium text-destructive hover:bg-destructive/20 disabled:opacity-50"
+      >
+        <XCircle className="h-3.5 w-3.5" />
+        Cancel
+      </button>
+    )}
+  </div>
+);
 
 interface StageConfig {
   label: string;

@@ -14,7 +14,17 @@ router.delete('/deployments/:id', deploymentController.terminateDeployment);
 // POST /api/azure/deploy
 // Body: { repoUrl, appName, socketId }
 router.post('/deploy', (req, res) => {
-  const { repoUrl, appName, socketId } = req.body;
+  const {
+    repoUrl,
+    appName,
+    socketId,
+    environmentVariables,
+    applicationType,
+    applicationName,
+    deploymentType,
+    estimatedCostMonthly,
+    estimatedDeployMinutes,
+  } = req.body;
 
   if (!repoUrl || !appName) {
     return res.status(400).json({ error: 'repoUrl and appName are required' });
@@ -39,6 +49,12 @@ router.post('/deploy', (req, res) => {
     socketId,
     io,
     userId,
+    environmentVariables,
+    applicationType,
+    applicationName,
+    deploymentType,
+    estimatedCostMonthly,
+    estimatedDeployMinutes,
     onStarted: (deployment) => {
       res.status(202).json({
         message: 'Azure deployment started',

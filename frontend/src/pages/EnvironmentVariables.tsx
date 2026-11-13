@@ -1,94 +1,88 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Database, Loader2, RefreshCw, Search, Eye, EyeOff, Copy, MoreHorizontal } from 'lucide-react';
-import { deploymentService } from '@/services/auth-service';
-import { apiClient } from '@/services/api/interceptors';
-import { ENDPOINTS, generateEndpoint } from '@/services/api/endpoints';
+import {
+  AlertTriangle,
+  Check,
+  Copy,
+  Database,
+  Eye,
+  EyeOff,
+  FileText,
+  Globe2,
+  Loader2,
+  Lock,
+  Plus,
+  RefreshCw,
+  Search,
+  Server,
+  Trash2,
+  Unlock,
+  X,
+} from 'lucide-react';
+import { projectService } from '@/services/auth-service';
 
-type EnvItem = {
-  key?: string;
-  value?: string;
+type ProjectEnvItem = {
+  key: string;
+  value: string;
+  encrypted?: boolean;
+  _id?: string;
 };
 
-type DeploymentRecord = {
-  _id?: string;
-  projectId?: string | null;
-  repositoryName?: string;
-  repositoryUrl?: string;
-  environmentVariables?: EnvItem[];
+type ProjectData = {
+  _id: string;
+  repositoryName: string;
+  repositoryOwner: string;
+  repositoryUrl: string;
+  environmentVariables: ProjectEnvItem[];
+  status?: string;
   updatedAt?: string;
   createdAt?: string;
-};
-
-type ProjectVariable = {
-  key: string;
-  updatedAt?: string;
-};
-
-type ProjectEnvGroup = {
-  projectName: string;
-  updatedAt?: string;
-  variables: ProjectVariable[];
-};
-
-const DEFAULT_SCOPE = 'Production, Preview, and Development';
-const INITIAL_VISIBLE_VARIABLES = 6;
-
-const deriveProjectName = (deployment: DeploymentRecord) => {
-  if (deployment.repositoryName?.trim()) return deployment.repositoryName.trim();
-
-  const rawUrl = deployment.repositoryUrl?.trim();
-  if (!rawUrl) return 'Unnamed project';
-
-  const parts = rawUrl.replace(/\.git$/i, '').split('/').filter(Boolean);
-  return parts[parts.length - 1] || 'Unnamed project';
-};
-
-const normalizeDate = (value?: string) => {
-  if (!value) return undefined;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? undefined : date;
-};
-
-const formatShortDate = (value?: string) => {
-  if (!value) return '-';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '-';
-  return date.toLocaleDateString();
+  latestDeployment?: {
+    _id: string;
+    status: string;
+    liveUrl?: string | null;
+    provider?: string;
+    containerGroupName?: string | null;
+    updatedAt?: string;
+  } | null;
 };
 
 export default function EnvironmentVariablesPage() {
-  const [deployments, setDeployments] = useState<DeploymentRecord[]>([]);
+  const [projects, setProjects] = useState<ProjectData[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [query, setQuery] = useState('');
-  const [expandedProjects, setExpandedProjects] = useState<Record<string, boolean>>({});
-  const [selectedVar, setSelectedVar] = useState<{
-    projectName: string;
-    key: string;
-    updatedAt?: string;
-  } | null>(null);
-  const [revealValue, setRevealValue] = useState(false);
-  const [selectedValue, setSelectedValue] = useState<string | null>(null);
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
-  const [editingValue, setEditingValue] = useState<string>('');
 
-  const fetchDeploymentData = async (silent = false) => {
-    if (silent) {
-      setRefreshing(true);
-    } else {
-      setLoading(true);
-    }
+  // Visibility map: `${projectId}:${key}` -> boolean
+  const [revealedKeys, setRevealedKeys] = useState<Record<string, boolean>>({});
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  // Modals & form state
+  const [addModalOpen, setAddModalOpen] = useState<{ projectId: string; projectName: string } | null>(null);
+  const [editModalOpen, setEditModalOpen] = useState<{ projectId: string; projectName: string; key: string; value: string; encrypted?: boolean } | null>(null);
+  const [bulkModalOpen, setBulkModalOpen] = useState<{ projectId: string; projectName: string } | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ projectId: string; key: string; projectName: string } | null>(null);
+
+  const [varKey, setVarKey] = useState('');
+  const [varValue, setVarValue] = useState('');
+  const [varEncrypted, setVarEncrypted] = useState(false);
+  const [bulkText, setBulkText] = useState('');
+
+  const fetchProjects = async (silent = false) => {
+    if (silent) setRefreshing(true);
+    else setLoading(true);
 
     try {
-      const response = await deploymentService.getAll();
-      const responseData = response?.data as any;
-      const raw = responseData?.data || responseData?.deployments || responseData || [];
-      setDeployments(Array.isArray(raw) ? raw : []);
+      const response = await projectService.getAll();
+      const raw = (response?.data as any)?.projects || (response?.data as any)?.data || response?.data || [];
+      setProjects(Array.isArray(raw) ? raw : []);
       setError(null);
-    } catch (fetchError: any) {
-      setError(fetchError?.response?.data?.error || fetchError?.message || 'Unable to load environment variables.');
+    } catch (err: any) {
+      console.error('Failed to load projects:', err);
+      setError(err?.response?.data?.error || err?.message || 'Unable to load project environment variables.');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -96,360 +90,665 @@ export default function EnvironmentVariablesPage() {
   };
 
   useEffect(() => {
-    void fetchDeploymentData();
+    void fetchProjects();
   }, []);
 
-  // When a variable is selected, derive its current value from deployments
-  useEffect(() => {
-    if (!selectedVar) {
-      setSelectedValue(null);
-      setRevealValue(false);
-      return;
+  const handleCopy = (text: string, id: string) => {
+    if (!text) return;
+    navigator.clipboard?.writeText(text);
+    setCopiedKey(id);
+    window.setTimeout(() => setCopiedKey(null), 2000);
+  };
+
+  const toggleReveal = (id: string) => {
+    setRevealedKeys((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  // 1. Add variable handler
+  const handleAddVariable = async () => {
+    if (!addModalOpen || !varKey.trim()) return;
+    setSaving(true);
+    setError(null);
+    setSuccessMessage(null);
+
+    try {
+      const res = await projectService.addEnvVariable(addModalOpen.projectId, {
+        key: varKey.trim().toUpperCase(),
+        value: varValue,
+        encrypted: varEncrypted,
+      });
+
+      const aciSynced = (res.data as any)?.aciSynced;
+      setSuccessMessage(
+        aciSynced
+          ? `Added "${varKey.trim()}" and synced to live container!`
+          : `Added "${varKey.trim()}" successfully.`
+      );
+
+      setAddModalOpen(null);
+      setVarKey('');
+      setVarValue('');
+      setVarEncrypted(false);
+      await fetchProjects(true);
+    } catch (err: any) {
+      setError(err?.response?.data?.error || err?.message || 'Failed to add environment variable.');
+    } finally {
+      setSaving(false);
     }
+  };
 
-    const { projectName, key } = selectedVar;
+  // 2. Edit variable handler
+  const handleEditVariable = async () => {
+    if (!editModalOpen || !editModalOpen.key) return;
+    setSaving(true);
+    setError(null);
+    setSuccessMessage(null);
 
-    // Find the latest deployment for this project that contains the key
-    let latestValue = null;
-    let latestDate = 0;
+    try {
+      const res = await projectService.addEnvVariable(editModalOpen.projectId, {
+        key: editModalOpen.key,
+        value: varValue,
+        encrypted: varEncrypted,
+      });
 
-    for (const d of deployments) {
-      const name = deriveProjectName(d);
-      if (name !== projectName) continue;
-      const vars = Array.isArray(d.environmentVariables) ? d.environmentVariables : [];
-      for (const v of vars) {
-        if (!v || !v.key) continue;
-        if (v.key === key) {
-          const t = normalizeDate(d.updatedAt || d.createdAt)?.getTime?.() || new Date(d.updatedAt || d.createdAt || Date.now()).getTime();
-          if (t > latestDate) {
-            latestDate = t;
-            latestValue = v.value ?? null;
+      const aciSynced = (res.data as any)?.aciSynced;
+      setSuccessMessage(
+        aciSynced
+          ? `Updated "${editModalOpen.key}" and synced to live container!`
+          : `Updated "${editModalOpen.key}" successfully.`
+      );
+
+      setEditModalOpen(null);
+      setVarValue('');
+      await fetchProjects(true);
+    } catch (err: any) {
+      setError(err?.response?.data?.error || err?.message || 'Failed to update environment variable.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // 3. Delete variable handler
+  const handleDeleteVariable = async () => {
+    if (!deleteConfirm) return;
+    setSaving(true);
+    setError(null);
+    setSuccessMessage(null);
+
+    try {
+      const res = await projectService.deleteEnvVariable(deleteConfirm.projectId, deleteConfirm.key);
+      const aciSynced = (res.data as any)?.aciSynced;
+      setSuccessMessage(
+        aciSynced
+          ? `Deleted "${deleteConfirm.key}" and updated live container!`
+          : `Deleted "${deleteConfirm.key}" successfully.`
+      );
+
+      setDeleteConfirm(null);
+      await fetchProjects(true);
+    } catch (err: any) {
+      setError(err?.response?.data?.error || err?.message || 'Failed to delete environment variable.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // 4. Bulk import handler
+  const handleBulkImport = async () => {
+    if (!bulkModalOpen || !bulkText.trim()) return;
+    setSaving(true);
+    setError(null);
+    setSuccessMessage(null);
+
+    try {
+      // Parse key=value lines
+      const parsedVars: Record<string, string> = {};
+      const lines = bulkText.split('\n');
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith('#')) continue;
+        const eqIdx = trimmed.indexOf('=');
+        if (eqIdx > 0) {
+          const k = trimmed.slice(0, eqIdx).trim().toUpperCase();
+          let v = trimmed.slice(eqIdx + 1).trim();
+          // Remove surrounding quotes if present
+          if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
+            v = v.slice(1, -1);
           }
+          if (k) parsedVars[k] = v;
         }
       }
-    }
 
-    setSelectedValue(latestValue);
-    setRevealValue(false);
-    // set editing field
-    setEditingValue(latestValue ?? '');
-  }, [selectedVar, deployments]);
-
-  useEffect(() => {
-    if (!selectedVar) {
-      setSelectedProjectId(null);
-      return;
-    }
-
-    // find a deployment for this project that has a projectId
-    const { projectName, key } = selectedVar;
-    for (const d of deployments) {
-      if (!d) continue;
-      const name = deriveProjectName(d);
-      if (name !== projectName) continue;
-      const vars = Array.isArray(d.environmentVariables) ? d.environmentVariables : [];
-      if (vars.some((v) => v?.key === key) && d.projectId) {
-        setSelectedProjectId(String(d.projectId));
-        return;
-      }
-    }
-    setSelectedProjectId(null);
-  }, [selectedVar, deployments]);
-
-  const groupedProjects = useMemo<ProjectEnvGroup[]>(() => {
-    const groupMap = new Map<string, { updatedAt?: string; variableMap: Map<string, ProjectVariable> }>();
-
-    for (const deployment of deployments) {
-      const envVars = Array.isArray(deployment.environmentVariables) ? deployment.environmentVariables : [];
-      if (!envVars.length) continue;
-
-      const projectName = deriveProjectName(deployment);
-      if (!groupMap.has(projectName)) {
-        groupMap.set(projectName, { updatedAt: deployment.updatedAt || deployment.createdAt, variableMap: new Map() });
+      if (Object.keys(parsedVars).length === 0) {
+        throw new Error('No valid KEY=VALUE lines found to import.');
       }
 
-      const currentGroup = groupMap.get(projectName);
-      if (!currentGroup) continue;
+      const res = await projectService.update(bulkModalOpen.projectId, {
+        environmentVariables: parsedVars,
+      });
 
-      const currentUpdated = normalizeDate(currentGroup.updatedAt);
-      const nextUpdated = normalizeDate(deployment.updatedAt || deployment.createdAt);
-      if (!currentUpdated || (nextUpdated && nextUpdated > currentUpdated)) {
-        currentGroup.updatedAt = deployment.updatedAt || deployment.createdAt;
-      }
+      const aciSynced = (res.data as any)?.aciSynced;
+      setSuccessMessage(
+        aciSynced
+          ? `Imported ${Object.keys(parsedVars).length} variables and synced to live container!`
+          : `Imported ${Object.keys(parsedVars).length} variables successfully.`
+      );
 
-      for (const envVar of envVars) {
-        const rawKey = envVar?.key?.trim();
-        if (!rawKey) continue;
-
-        const existing = currentGroup.variableMap.get(rawKey);
-        const candidateUpdatedAt = deployment.updatedAt || deployment.createdAt;
-
-        if (!existing) {
-          currentGroup.variableMap.set(rawKey, {
-            key: rawKey,
-            updatedAt: candidateUpdatedAt,
-          });
-          continue;
-        }
-
-        const existingDate = normalizeDate(existing.updatedAt);
-        const candidateDate = normalizeDate(candidateUpdatedAt);
-        if (!existingDate || (candidateDate && candidateDate > existingDate)) {
-          existing.updatedAt = candidateUpdatedAt;
-        }
-      }
+      setBulkModalOpen(null);
+      setBulkText('');
+      await fetchProjects(true);
+    } catch (err: any) {
+      setError(err?.response?.data?.error || err?.message || 'Failed to import environment variables.');
+    } finally {
+      setSaving(false);
     }
+  };
 
-    return Array.from(groupMap.entries())
-      .map(([projectName, group]) => ({
-        projectName,
-        updatedAt: group.updatedAt,
-        variables: Array.from(group.variableMap.values()).sort((a, b) => a.key.localeCompare(b.key)),
-      }))
-      .sort((a, b) => a.projectName.localeCompare(b.projectName));
-  }, [deployments]);
-
+  // Filtering
   const filteredProjects = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-    if (!normalizedQuery) return groupedProjects;
+    const q = query.trim().toLowerCase();
+    if (!q) return projects;
 
-    return groupedProjects
-      .map((project) => {
-        const projectMatches = project.projectName.toLowerCase().includes(normalizedQuery);
-        if (projectMatches) return project;
+    return projects.filter((p) => {
+      const matchName = p.repositoryName?.toLowerCase().includes(q) || p.repositoryOwner?.toLowerCase().includes(q);
+      const matchKey = (p.environmentVariables || []).some((v) => v.key?.toLowerCase().includes(q));
+      return matchName || matchKey;
+    });
+  }, [projects, query]);
 
-        const matchedVariables = project.variables.filter((item) => item.key.toLowerCase().includes(normalizedQuery));
-        return {
-          ...project,
-          variables: matchedVariables,
-        };
-      })
-      .filter((project) => project.variables.length > 0 || project.projectName.toLowerCase().includes(normalizedQuery));
-  }, [groupedProjects, query]);
-
-  const totalVariableCount = useMemo(
-    () => groupedProjects.reduce((count, project) => count + project.variables.length, 0),
-    [groupedProjects]
-  );
+  const totalVarCount = useMemo(() => {
+    return projects.reduce((sum, p) => sum + (p.environmentVariables?.length || 0), 0);
+  }, [projects]);
 
   return (
-    <>
-      <main className="space-y-6">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary px-3 py-1 text-xs uppercase tracking-[0.24em] text-muted-foreground">
-                <Database className="h-3.5 w-3.5" />
-                Environment Variables
-              </div>
-              <h1 className="mt-4 text-3xl font-semibold text-foreground sm:text-4xl">Project environment variables</h1>
-              <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
-                View all environment variable keys grouped by project. Keys are collected from deployment records and shown without attention tags.
-              </p>
+    <main className="space-y-6 pb-12">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Header */}
+        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary px-3 py-1 text-xs uppercase tracking-[0.24em] text-muted-foreground">
+              <Database className="h-3.5 w-3.5" />
+              Project Settings
             </div>
+            <h1 className="mt-4 text-3xl font-semibold text-foreground sm:text-4xl">Environment Variables</h1>
+            <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
+              Manage application environment variables per project. Changes can be saved and hot-synced directly to live containers without rebuilds.
+            </p>
+          </div>
 
+          <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => void fetchDeploymentData(true)}
-              className="inline-flex items-center gap-2 rounded-xl border border-border bg-secondary px-4 py-2 text-sm text-foreground transition hover:bg-secondary"
+              disabled={refreshing}
+              onClick={() => void fetchProjects(true)}
+              className="inline-flex items-center gap-2 rounded-xl border border-border bg-secondary px-4 py-2.5 text-sm text-foreground transition hover:bg-white/[0.06] disabled:opacity-50"
             >
               {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
               Refresh
             </button>
-          </motion.div>
+          </div>
+        </motion.div>
 
-          <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            <div className="rounded-2xl border border-border bg-card p-4 ">
-              <div className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Projects</div>
-              <div className="mt-3 text-3xl font-semibold text-foreground">{groupedProjects.length}</div>
-            </div>
-            <div className="rounded-2xl border border-border bg-card p-4 ">
-              <div className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Variables</div>
-              <div className="mt-3 text-3xl font-semibold text-primary">{totalVariableCount}</div>
-            </div>
-            <div className="rounded-2xl border border-border bg-card p-4 ">
-              <div className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Data Source</div>
-              <div className="mt-3 text-lg font-semibold text-foreground">Deployments</div>
+        {/* Stats */}
+        <div className="mt-6 grid gap-4 sm:grid-cols-3">
+          <div className="rounded-2xl border border-border bg-card p-4">
+            <div className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Connected Projects</div>
+            <div className="mt-3 text-3xl font-semibold text-foreground">{projects.length}</div>
+          </div>
+          <div className="rounded-2xl border border-border bg-card p-4">
+            <div className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Total Variables</div>
+            <div className="mt-3 text-3xl font-semibold text-primary">{totalVarCount}</div>
+          </div>
+          <div className="rounded-2xl border border-border bg-card p-4">
+            <div className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Live Hot-Sync</div>
+            <div className="mt-3 flex items-center gap-2 text-sm font-medium text-emerald-400">
+              <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+              Supported for Azure ACI & Containers
             </div>
           </div>
+        </div>
 
-          <div className="mt-6 rounded-3xl border border-border bg-card p-4 ">
-            <div className="relative w-full lg:max-w-lg">
-              <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search projects or environment keys"
-                className="w-full rounded-2xl border border-border bg-secondary py-3 pl-11 pr-4 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary"
-              />
-            </div>
+        {/* Notifications */}
+        {error && (
+          <div className="mt-4 flex items-center gap-2 rounded-2xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            <span>{error}</span>
           </div>
+        )}
 
-          {error && (
-            <div className="mt-4 rounded-2xl border border-destructive bg-destructive/10 px-4 py-3 text-sm text-destructive">
-              {error}
-            </div>
-          )}
+        {successMessage && (
+          <div className="mt-4 flex items-center gap-2 rounded-2xl border border-emerald-400/40 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-300">
+            <Check className="h-4 w-4 shrink-0" />
+            <span>{successMessage}</span>
+          </div>
+        )}
 
-          {loading ? (
-            <div className="mt-8 grid gap-4">
-              {[...Array(3)].map((_, index) => (
-                <div key={index} className="h-44 animate-pulse rounded-3xl border border-border bg-secondary" />
-              ))}
-            </div>
-          ) : filteredProjects.length === 0 ? (
-            <div className="mt-8 rounded-3xl border border-border bg-card p-10 text-center text-muted-foreground">
-              No environment variables found for your projects.
-            </div>
-          ) : (
-            <div className="mt-8 space-y-5">
-              {filteredProjects.map((project) => {
-                const isExpanded = Boolean(expandedProjects[project.projectName]);
-                const visibleVariables = isExpanded
-                  ? project.variables
-                  : project.variables.slice(0, INITIAL_VISIBLE_VARIABLES);
+        {/* Search */}
+        <div className="mt-6 rounded-2xl border border-border bg-card p-3">
+          <div className="relative w-full">
+            <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Filter by project name or variable key (e.g. MONGODB_URI, PORT)..."
+              className="w-full rounded-xl border border-border bg-secondary py-2.5 pl-11 pr-4 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary"
+            />
+          </div>
+        </div>
 
-                return (
-                  <motion.section
-                    key={project.projectName}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="rounded-3xl border border-border bg-card p-5 "
-                  >
-                    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                      <div className="flex items-center gap-3">
-                        <h2 className="text-xl font-semibold text-foreground">{project.projectName}</h2>
-                        <span className="rounded-full bg-secondary px-2.5 py-1 text-xs text-foreground">
-                          {project.variables.length}
-                        </span>
+        {/* Projects List */}
+        {loading ? (
+          <div className="mt-8 space-y-4">
+            {[1, 2].map((i) => (
+              <div key={i} className="h-48 animate-pulse rounded-2xl border border-border bg-secondary" />
+            ))}
+          </div>
+        ) : filteredProjects.length === 0 ? (
+          <div className="mt-8 rounded-2xl border border-border bg-card p-12 text-center text-muted-foreground">
+            No projects found matching your query.
+          </div>
+        ) : (
+          <div className="mt-8 space-y-6">
+            {filteredProjects.map((project) => {
+              const envList = project.environmentVariables || [];
+              const liveDep = project.latestDeployment;
+              const isLive = liveDep && ['running', 'success'].includes(liveDep.status);
+
+              return (
+                <div key={project._id} className="rounded-2xl border border-border bg-card p-5">
+                  {/* Project Top Bar */}
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-border pb-4">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h2 className="text-xl font-semibold text-foreground">{project.repositoryName}</h2>
+                        <span className="text-xs font-mono text-muted-foreground">({project.repositoryOwner})</span>
+                        {isLive && (
+                          <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2 py-0.5 text-[10px] font-medium text-emerald-300">
+                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                            Live ACI
+                          </span>
+                        )}
                       </div>
-                      <div className="text-sm text-muted-foreground">Updated {formatShortDate(project.updatedAt)}</div>
+                      <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
+                        <span>{envList.length} variable{envList.length === 1 ? '' : 's'}</span>
+                        {liveDep?.liveUrl && (
+                          <a
+                            href={liveDep.liveUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1 text-primary hover:underline"
+                          >
+                            <Globe2 className="h-3 w-3" />
+                            {liveDep.liveUrl}
+                          </a>
+                        )}
+                      </div>
                     </div>
 
-                    <div className="overflow-x-auto rounded-2xl border border-border">
-                      <table className="w-full min-w-[760px]">
-                        <thead>
-                          <tr className="bg-secondary text-left text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                            <th className="px-4 py-3">Variable</th>
-                            <th className="px-4 py-3">Environment</th>
-                            <th className="px-4 py-3">Last Updated</th>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setVarKey('');
+                          setVarValue('');
+                          setVarEncrypted(false);
+                          setAddModalOpen({ projectId: project._id, projectName: project.repositoryName });
+                        }}
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary transition hover:bg-primary/20"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        Add Variable
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setBulkText('');
+                          setBulkModalOpen({ projectId: project._id, projectName: project.repositoryName });
+                        }}
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-secondary px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-white/[0.06]"
+                        title="Import multiple variables from .env format"
+                      >
+                        <FileText className="h-3.5 w-3.5" />
+                        Bulk Import (.env)
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Variables Table */}
+                  {envList.length === 0 ? (
+                    <div className="py-8 text-center text-xs text-muted-foreground">
+                      No environment variables defined yet for this project. Click &ldquo;Add Variable&rdquo; to configure one.
+                    </div>
+                  ) : (
+                    <div className="mt-4 overflow-x-auto rounded-xl border border-border">
+                      <table className="w-full text-left text-sm">
+                        <thead className="bg-secondary text-[11px] uppercase tracking-wider text-muted-foreground border-b border-border">
+                          <tr>
+                            <th className="px-4 py-2.5">Key</th>
+                            <th className="px-4 py-2.5">Value</th>
+                            <th className="px-4 py-2.5">Scope</th>
+                            <th className="px-4 py-2.5 text-right">Actions</th>
                           </tr>
                         </thead>
-                        <tbody>
-                          {visibleVariables.map((variable) => (
-                            <tr
-                              key={`${project.projectName}:${variable.key}`}
-                              className="border-t border-border text-sm text-foreground hover:bg-secondary cursor-pointer"
-                              onClick={() => setSelectedVar({ projectName: project.projectName, key: variable.key!, updatedAt: variable.updatedAt })}
-                            >
-                              <td className="px-4 py-3 font-mono text-[13px] text-primary">{variable.key}</td>
-                              <td className="px-4 py-3 text-foreground">{DEFAULT_SCOPE}</td>
-                              <td className="px-4 py-3 text-foreground">{formatShortDate(variable.updatedAt)}</td>
-                            </tr>
-                          ))}
+                        <tbody className="divide-y divide-border">
+                          {envList.map((item) => {
+                            const rowId = `${project._id}:${item.key}`;
+                            const isRevealed = Boolean(revealedKeys[rowId]);
+                            const isCopied = copiedKey === rowId;
+
+                            return (
+                              <tr key={item.key} className="hover:bg-secondary/40 transition">
+                                <td className="px-4 py-3 font-mono text-xs font-semibold text-primary">
+                                  {item.key}
+                                </td>
+                                <td className="px-4 py-3 font-mono text-xs text-foreground">
+                                  <div className="flex items-center gap-2 max-w-md">
+                                    <span className="truncate">
+                                      {isRevealed ? item.value : '••••••••••••••••'}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleReveal(rowId)}
+                                      className="text-muted-foreground hover:text-foreground"
+                                      title={isRevealed ? 'Hide' : 'Reveal'}
+                                    >
+                                      {isRevealed ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleCopy(item.value, rowId)}
+                                      className="text-muted-foreground hover:text-foreground"
+                                      title="Copy value"
+                                    >
+                                      {isCopied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+                                    </button>
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3 text-xs text-muted-foreground">
+                                  <span className="inline-flex items-center gap-1 rounded bg-secondary px-2 py-0.5 text-[11px]">
+                                    {item.encrypted ? <Lock className="h-3 w-3 text-amber-400" /> : <Unlock className="h-3 w-3 text-neutral-400" />}
+                                    Production / All
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3 text-right">
+                                  <div className="flex items-center justify-end gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setVarValue(item.value || '');
+                                        setVarEncrypted(Boolean(item.encrypted));
+                                        setEditModalOpen({
+                                          projectId: project._id,
+                                          projectName: project.repositoryName,
+                                          key: item.key,
+                                          value: item.value || '',
+                                          encrypted: Boolean(item.encrypted),
+                                        });
+                                      }}
+                                      className="rounded-lg border border-border px-2.5 py-1 text-xs text-foreground hover:bg-secondary"
+                                    >
+                                      Edit
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setDeleteConfirm({
+                                          projectId: project._id,
+                                          key: item.key,
+                                          projectName: project.repositoryName,
+                                        });
+                                      }}
+                                      className="rounded-lg border border-destructive/30 px-2 py-1 text-xs text-destructive hover:bg-destructive/10"
+                                      title="Delete variable"
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
-                    {project.variables.length > INITIAL_VISIBLE_VARIABLES && (
-                      <div className="mt-4 flex justify-center">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setExpandedProjects((prev) => ({
-                              ...prev,
-                              [project.projectName]: !isExpanded,
-                            }))
-                          }
-                          className="rounded-full border border-border bg-secondary px-4 py-2 text-sm text-foreground transition hover:bg-secondary"
-                        >
-                          {isExpanded ? 'Show Less' : 'Show More'}
-                        </button>
-                      </div>
-                    )}
-                  </motion.section>
-                );
-              })}
+      {/* MODAL: Add Variable */}
+      {addModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setAddModalOpen(null)} />
+          <div className="relative z-10 w-full max-w-lg rounded-2xl border border-border bg-card p-6 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-border pb-3">
+              <div>
+                <h3 className="text-lg font-semibold text-foreground">Add Environment Variable</h3>
+                <p className="text-xs text-muted-foreground">Project: {addModalOpen.projectName}</p>
+              </div>
+              <button type="button" onClick={() => setAddModalOpen(null)} className="text-muted-foreground hover:text-foreground">
+                <X className="h-5 w-5" />
+              </button>
             </div>
-          )}
-        </div>
-      </main>
-  
-      {/* Variable detail modal */}
-      {selectedVar && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-secondary" onClick={() => setSelectedVar(null)} />
-          <div className="relative z-60 w-full max-w-2xl mx-4 max-h-[80vh] overflow-auto">
-            <div className="rounded-2xl bg-card border border-border p-6 shadow-xl">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <div className="flex items-center gap-3">
-                    <div className="px-3 py-1 rounded bg-secondary text-foreground font-mono">{selectedVar.key}</div>
-                    <div className="text-sm text-muted-foreground">All Environments</div>
-                  </div>
-                  <div className="mt-2 text-xs text-muted-foreground">Added {formatShortDate(selectedVar.updatedAt)}</div>
-                </div>
 
-                <div className="flex items-center gap-2">
-                  <button className="p-2 rounded-full bg-secondary">
-                    <MoreHorizontal className="w-4 h-4 text-foreground" />
-                  </button>
-                </div>
+            <div className="mt-4 space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-foreground uppercase tracking-wider mb-1.5">
+                  Key
+                </label>
+                <input
+                  type="text"
+                  value={varKey}
+                  onChange={(e) => setVarKey(e.target.value)}
+                  placeholder="e.g. MONGODB_URI, JWT_SECRET, PORT"
+                  className="w-full rounded-xl border border-border bg-secondary px-3.5 py-2.5 font-mono text-sm text-foreground outline-none focus:border-primary"
+                  autoFocus
+                />
               </div>
 
-              <div className="mt-4">
-                <label className="block text-xs text-muted-foreground mb-2">Value</label>
-                <div className="flex items-center gap-3">
-                  <input
-                    type={revealValue ? 'text' : 'password'}
-                    value={editingValue}
-                    onChange={(e) => setEditingValue(e.target.value)}
-                    className="flex-1 rounded-lg border border-border bg-secondary px-4 py-3 font-mono text-sm text-foreground"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setRevealValue((v) => !v)}
-                    className="p-2 rounded-lg border border-border bg-secondary text-foreground"
-                    aria-label="Toggle reveal value"
-                  >
-                    {revealValue ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => editingValue && navigator.clipboard?.writeText(String(editingValue))}
-                    className="p-2 rounded-lg border border-border bg-secondary text-foreground"
-                    aria-label="Copy value"
-                  >
-                    <Copy className="w-4 h-4" />
-                  </button>
-
-                  <button
-                    onClick={async () => {
-                      if (!selectedProjectId || !selectedVar) return;
-                      try {
-                        const payload = { key: selectedVar.key, value: editingValue };
-                        await apiClient.put(generateEndpoint(ENDPOINTS.PROJECTS.UPDATE, { id: selectedProjectId }), payload);
-                        // refresh deployments to reflect change
-                        await fetchDeploymentData();
-                        setSelectedValue(editingValue);
-                        // close modal and clear editing state
-                        setSelectedVar(null);
-                        setEditingValue('');
-                        setSelectedProjectId(null);
-                      } catch (err) {
-                        console.error('Failed to save env var', err);
-                      }
-                    }}
-                    className="rounded-lg px-4 py-2 bg-primary/10 text-primary"
-                  >
-                    Save
-                  </button>
-                </div>
+              <div>
+                <label className="block text-xs font-medium text-foreground uppercase tracking-wider mb-1.5">
+                  Value
+                </label>
+                <textarea
+                  rows={3}
+                  value={varValue}
+                  onChange={(e) => setVarValue(e.target.value)}
+                  placeholder="Enter variable value..."
+                  className="w-full rounded-xl border border-border bg-secondary px-3.5 py-2.5 font-mono text-sm text-foreground outline-none focus:border-primary"
+                />
               </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="add-encrypted"
+                  checked={varEncrypted}
+                  onChange={(e) => setVarEncrypted(e.target.checked)}
+                  className="rounded border-border text-primary focus:ring-0"
+                />
+                <label htmlFor="add-encrypted" className="text-xs text-muted-foreground cursor-pointer">
+                  Encrypt & mask by default (sensitive credentials, API keys)
+                </label>
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3 border-t border-border pt-4">
+              <button
+                type="button"
+                onClick={() => setAddModalOpen(null)}
+                className="rounded-xl border border-border bg-secondary px-4 py-2 text-xs font-medium text-foreground hover:bg-white/[0.04]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={saving || !varKey.trim()}
+                onClick={() => void handleAddVariable()}
+                className="inline-flex items-center gap-2 rounded-xl border border-primary bg-primary px-4 py-2 text-xs font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-50"
+              >
+                {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                Save Variable
+              </button>
             </div>
           </div>
         </div>
       )}
-    </>
+
+      {/* MODAL: Edit Variable */}
+      {editModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setEditModalOpen(null)} />
+          <div className="relative z-10 w-full max-w-lg rounded-2xl border border-border bg-card p-6 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-border pb-3">
+              <div>
+                <h3 className="text-lg font-semibold text-foreground">Edit Environment Variable</h3>
+                <p className="text-xs font-mono text-primary">{editModalOpen.key}</p>
+              </div>
+              <button type="button" onClick={() => setEditModalOpen(null)} className="text-muted-foreground hover:text-foreground">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-foreground uppercase tracking-wider mb-1.5">
+                  Value
+                </label>
+                <textarea
+                  rows={4}
+                  value={varValue}
+                  onChange={(e) => setVarValue(e.target.value)}
+                  className="w-full rounded-xl border border-border bg-secondary px-3.5 py-2.5 font-mono text-sm text-foreground outline-none focus:border-primary"
+                  autoFocus
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="edit-encrypted"
+                  checked={varEncrypted}
+                  onChange={(e) => setVarEncrypted(e.target.checked)}
+                  className="rounded border-border text-primary focus:ring-0"
+                />
+                <label htmlFor="edit-encrypted" className="text-xs text-muted-foreground cursor-pointer">
+                  Mask value in UI
+                </label>
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3 border-t border-border pt-4">
+              <button
+                type="button"
+                onClick={() => setEditModalOpen(null)}
+                className="rounded-xl border border-border bg-secondary px-4 py-2 text-xs font-medium text-foreground hover:bg-white/[0.04]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => void handleEditVariable()}
+                className="inline-flex items-center gap-2 rounded-xl border border-primary bg-primary px-4 py-2 text-xs font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-50"
+              >
+                {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                Save & Hot-Sync
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Bulk Import (.env) */}
+      {bulkModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setBulkModalOpen(null)} />
+          <div className="relative z-10 w-full max-w-xl rounded-2xl border border-border bg-card p-6 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-border pb-3">
+              <div>
+                <h3 className="text-lg font-semibold text-foreground">Bulk Import .env</h3>
+                <p className="text-xs text-muted-foreground">Project: {bulkModalOpen.projectName}</p>
+              </div>
+              <button type="button" onClick={() => setBulkModalOpen(null)} className="text-muted-foreground hover:text-foreground">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-3">
+              <p className="text-xs text-muted-foreground">
+                Paste your <code className="font-mono text-primary">.env</code> file content below. Lines with <code className="font-mono">#</code> comments will be ignored.
+              </p>
+              <textarea
+                rows={8}
+                value={bulkText}
+                onChange={(e) => setBulkText(e.target.value)}
+                placeholder="PORT=5000&#10;MONGODB_URI=mongodb+srv://...&#10;JWT_SECRET=supersecret123&#10;NODE_ENV=production"
+                className="w-full rounded-xl border border-border bg-secondary p-3 font-mono text-xs text-foreground outline-none focus:border-primary"
+                autoFocus
+              />
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3 border-t border-border pt-4">
+              <button
+                type="button"
+                onClick={() => setBulkModalOpen(null)}
+                className="rounded-xl border border-border bg-secondary px-4 py-2 text-xs font-medium text-foreground hover:bg-white/[0.04]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={saving || !bulkText.trim()}
+                onClick={() => void handleBulkImport()}
+                className="inline-flex items-center gap-2 rounded-xl border border-primary bg-primary px-4 py-2 text-xs font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-50"
+              >
+                {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                Import Variables
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Delete Confirm */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setDeleteConfirm(null)} />
+          <div className="relative z-10 w-full max-w-md rounded-2xl border border-destructive/40 bg-card p-6 shadow-2xl">
+            <h3 className="text-lg font-semibold text-destructive">Delete Variable</h3>
+            <p className="mt-2 text-xs text-neutral-300">
+              Are you sure you want to delete <code className="font-mono font-bold text-primary">{deleteConfirm.key}</code> from project <strong>{deleteConfirm.projectName}</strong>?
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              If an Azure ACI container is currently running, it will be automatically restarted without this variable.
+            </p>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setDeleteConfirm(null)}
+                className="rounded-xl border border-border bg-secondary px-4 py-2 text-xs font-medium text-foreground hover:bg-white/[0.04]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => void handleDeleteVariable()}
+                className="inline-flex items-center gap-2 rounded-xl border border-destructive bg-destructive px-4 py-2 text-xs font-medium text-destructive-foreground transition hover:bg-destructive/90 disabled:opacity-50"
+              >
+                {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                Confirm Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </main>
   );
 }

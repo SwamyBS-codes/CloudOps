@@ -22,31 +22,38 @@ class ContainerDeploymentStrategy {
     const isAzure = Boolean(process.env.AZURE_CLIENT_ID && process.env.ACR_LOGIN_SERVER);
 
     if (isAzure) {
-      let startedDeployment = null;
-      await runAzureDeployment({
-        repoUrl: repositoryUrl,
-        appName: applicationName || repositoryName,
-        socketId: socketId || null,
-        io,
-        userId: String(userId || 'anonymous'),
-        applicationType,
-        applicationName: applicationName || repositoryName,
-        deploymentType: mapping.deploymentType,
-        provider: 'azure',
-        estimatedCostMonthly: mapping.estimatedCostMonthlyUsd,
-        estimatedDeployMinutes: mapping.estimatedDeployMinutes,
-        environmentVariables: environmentVariables || {},
-        onStarted: (dep) => {
-          startedDeployment = dep;
-        },
+      return new Promise((resolve, reject) => {
+        let resolved = false;
+        runAzureDeployment({
+          repoUrl: repositoryUrl,
+          appName: applicationName || repositoryName,
+          socketId: socketId || null,
+          io,
+          userId: String(userId || 'anonymous'),
+          applicationType,
+          applicationName: applicationName || repositoryName,
+          deploymentType: mapping.deploymentType,
+          provider: 'azure',
+          estimatedCostMonthly: mapping.estimatedCostMonthlyUsd,
+          estimatedDeployMinutes: mapping.estimatedDeployMinutes,
+          environmentVariables: environmentVariables || {},
+          onStarted: (dep) => {
+            resolved = true;
+            resolve({
+              success: true,
+              message: 'Backend API deployment started on Azure Container Instances (ACI)',
+              deploymentId: dep?._id?.toString() || 'azure-deploying',
+              status: 'building',
+            });
+          },
+        }).catch((err) => {
+          if (!resolved) {
+            reject(err);
+          } else {
+            console.error('[Azure] Background deployment pipeline error:', err);
+          }
+        });
       });
-
-      return {
-        success: true,
-        message: 'Backend API deployment started on Azure Container Instances (ACI)',
-        deploymentId: startedDeployment?._id?.toString() || 'azure-deploying',
-        status: 'building',
-      };
     }
 
     const result = await deploymentEngine.startDeployment({

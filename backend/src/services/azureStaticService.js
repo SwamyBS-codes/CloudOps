@@ -94,6 +94,20 @@ class AzureStaticService {
     onLog(`Azure Static Website ready: ${websiteUrl}`, 'success');
     return websiteUrl;
   }
+
+  async deleteDirectory(prefix, onLog = () => {}) {
+    if (!prefix) return 0;
+    const client = this.getClient();
+    const containerClient = client.getContainerClient(this.containerName);
+    const cleanPrefix = prefix.replace(/^\/+|\/+$/g, '');
+    let count = 0;
+    for await (const blob of containerClient.listBlobsFlat({ prefix: cleanPrefix })) {
+      await containerClient.deleteBlob(blob.name);
+      count++;
+    }
+    onLog(`Purged ${count} files from Azure Storage ($web) under /${cleanPrefix}.`, 'info');
+    return count;
+  }
 }
 
 module.exports = new AzureStaticService();

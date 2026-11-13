@@ -8,8 +8,11 @@ const fs = require('fs/promises');
 const { existsSync } = require('fs');
 const { spawn } = require('child_process');
 const simpleGit = require('simple-git');
+const mongoose = require('mongoose');
 const { v4: uuidv4 } = require('uuid');
 const Deployment = require('../models/Deployment');
+const User = require('../models/User');
+const blobBuildService = require('./blobBuildService');
 const { maskSecrets } = require('../utils/logSanitizer');
 const { pushDeploymentLog } = require('../utils/deploymentPersistence');
 const { getBuildDir } = require('../utils/pathResolver');
@@ -350,76 +353,166 @@ async function runAzureDeployment({
 
     await emitLog(io, socketId, `[Azure] Starting deployment ${deploymentId}`, deployment, 'system');
 
-    await emitLog(io, socketId, `[Azure] Cloning ${repoUrl}`, deployment, 'git');
-
-    await safeRemove(cloneDir);
-    await safeRemove(artifactsDir);
-    await fs.mkdir(cloneDir, { recursive: true });
-    await fs.mkdir(artifactsDir, { recursive: true });
-
-    if (activeItem.cancelled) throw new Error('Deployment cancelled by user');
-
-    await git.clone(repoUrl, cloneDir);
-    if (activeItem.cancelled) throw new Error('Deployment cancelled by user');
-
-    await emitLog(io, socketId, '[Azure] Repository cloned.', deployment, 'git', 'success');
-    logLines.push(`[Azure] Cloned ${repoUrl}`);
-
-    const buildPlan = await ensureDockerfile(cloneDir);
-    await emitLog(io, socketId, `[Azure] Dockerfile ready. Framework: ${buildPlan.framework}`, deployment, 'framework');
-    if (deployment) {
-      deployment.framework = buildPlan.framework;
-      deployment.frameworkVersion = buildPlan.frameworkVersion;
-      await deployment.save();
-    }
-    logLines.push(`[Azure] Framework: ${buildPlan.framework}`);
-
     const fullImage = `${cfg.acrLoginServer}/${sanitizedName}:${deploymentId}`;
-    await emitLog(io, socketId, `[Azure] Building image ${fullImage}...`, deployment, 'docker');
+    let containerPort = DEFAULT_CONTAINER_PORT;
 
-    if (activeItem.cancelled) throw new Error('Deployment cancelled by user');
+    // Zero-Disk Cloud-Native Architecture: Stream directly from GitHub to Azure Blob, build in Ephemeral ACI
+    let buildMode = 'cloud-native';
+    let blobInfo = null;
 
-    let buildLogQueue = Promise.resolve();
-    await runCommand('docker', ['build', '-t', fullImage, '.'], { cwd: cloneDir }, (line) => {
-      buildLogQueue = buildLogQueue.then(() => emitLog(io, socketId, line, deployment, 'docker'));
-      logLines.push(line);
-    }, activeItem);
-    await buildLogQueue;
+    if (repoUrl.includes('github.com')) {
+      try {
+        await emitLog(io, socketId, `[Azure CloudOps] Starting zero-disk deployment pipeline for ${sanitizedName}:${deploymentId}...`, deployment, 'system');
 
-    if (activeItem.cancelled) throw new Error('Deployment cancelled by user');
+        let githubToken = null;
+        if (userId && userId !== 'anonymous') {
+          const userRecord = await User.findOne({
+            $or: [
+              mongoose.Types.ObjectId.isValid(userId) ? { _id: userId } : null,
+              { githubId: String(userId) },
+            ].filter(Boolean),
+          });
+          githubToken = userRecord?.githubAccessToken || null;
+        }
 
-    if (deployment) {
-      deployment.infrastructure = deployment.infrastructure || {};
-      deployment.infrastructure.acr = deployment.infrastructure.acr || {};
-      deployment.infrastructure.acr.imageUri = fullImage;
-      deployment.infrastructure.acr.imageTag = deploymentId;
-      deployment.infrastructure.acr.imageName = sanitizedName;
-      await deployment.save();
+        await emitLog(io, socketId, '[Azure CloudOps] Zero-disk pipe: Streaming repository tarball directly from GitHub into Azure Blob Storage...', deployment, 'storage');
+
+        blobInfo = await blobBuildService.streamGitHubToBlob({
+          repoUrl,
+          deploymentId,
+          appName: sanitizedName,
+          githubToken,
+          onLog: (msg, level) => emitLog(io, socketId, msg, deployment, 'storage', level),
+        });
+
+        activeItem.blobName = blobInfo.blobName;
+        logLines.push(`[Azure CloudOps] Streamed archive to blob: ${blobInfo.blobName}`);
+
+        const builderGroup = `build-${sanitizedName}-${deploymentId}`.slice(0, 63);
+        activeItem.builderGroup = builderGroup;
+
+        await emitLog(io, socketId, `[Azure CloudOps] Launching Ephemeral ACI Builder container (${builderGroup})...`, deployment, 'kaniko');
+        await emitLog(io, socketId, `[Azure CloudOps] Server host disk usage: 0 KB. Building in isolated cloud container...`, deployment, 'kaniko');
+
+        const builderArgs = [
+          '-m', 'orchestrator.core.ephemeral_builder',
+          '--context-url', blobInfo.sasUrl,
+          '--destination', fullImage,
+          '--builder-group', builderGroup,
+          '--acr-server', cfg.acrLoginServer,
+          '--acr-username', cfg.acrUsername,
+          '--acr-password', cfg.acrPassword,
+          '--subscription-id', process.env.AZURE_SUBSCRIPTION_ID,
+          '--resource-group', cfg.resourceGroup,
+          '--location', cfg.location,
+          '--cpu', '1',
+          '--memory-gb', '1.5',
+        ];
+
+        let buildLogQueue = Promise.resolve();
+        await runCommand(cfg.python, builderArgs, { cwd: cfg.orchestratorCwd }, (line) => {
+          buildLogQueue = buildLogQueue.then(() => emitLog(io, socketId, line, deployment, 'kaniko'));
+          logLines.push(line);
+        }, activeItem);
+        await buildLogQueue;
+
+        await emitLog(io, socketId, '[Azure CloudOps] Cloud build & push completed successfully. Image ready in ACR.', deployment, 'kaniko', 'success');
+
+        if (deployment) {
+          deployment.infrastructure = deployment.infrastructure || {};
+          deployment.infrastructure.acr = deployment.infrastructure.acr || {};
+          deployment.infrastructure.acr.imageUri = fullImage;
+          deployment.infrastructure.acr.imageTag = deploymentId;
+          deployment.infrastructure.acr.imageName = sanitizedName;
+          await deployment.save();
+        }
+      } catch (cloudErr) {
+        if (activeItem.cancelled) throw cloudErr;
+        await emitLog(io, socketId, `[Azure CloudOps] Cloud builder note: ${cloudErr.message}. Executing local fallback pipeline...`, deployment, 'system', 'warning');
+        buildMode = 'local-fallback';
+      } finally {
+        if (blobInfo?.blobName) {
+          await blobBuildService.deleteBuildBlob(blobInfo.blobName);
+        }
+        activeItem.builderGroup = null;
+        activeItem.blobName = null;
+      }
+    } else {
+      buildMode = 'local-fallback';
     }
 
-    if (cfg.acrUsername && cfg.acrPassword) {
-      await emitLog(io, socketId, '[Azure] Logging into ACR...', deployment, 'acr');
+    if (buildMode === 'local-fallback') {
+      await emitLog(io, socketId, `[Azure] Cloning ${repoUrl}`, deployment, 'git');
 
-      let loginLogQueue = Promise.resolve();
-      await runCommand('docker', ['login', cfg.acrLoginServer, '-u', cfg.acrUsername, '-p', cfg.acrPassword], {}, (line) => {
-        loginLogQueue = loginLogQueue.then(() => emitLog(io, socketId, line, deployment, 'acr'));
+      await safeRemove(cloneDir);
+      await safeRemove(artifactsDir);
+      await fs.mkdir(cloneDir, { recursive: true });
+      await fs.mkdir(artifactsDir, { recursive: true });
+
+      if (activeItem.cancelled) throw new Error('Deployment cancelled by user');
+
+      await git.clone(repoUrl, cloneDir);
+      if (activeItem.cancelled) throw new Error('Deployment cancelled by user');
+
+      await emitLog(io, socketId, '[Azure] Repository cloned.', deployment, 'git', 'success');
+      logLines.push(`[Azure] Cloned ${repoUrl}`);
+
+      const buildPlan = await ensureDockerfile(cloneDir);
+      containerPort = buildPlan?.containerPort || DEFAULT_CONTAINER_PORT;
+      await emitLog(io, socketId, `[Azure] Dockerfile ready. Framework: ${buildPlan.framework}`, deployment, 'framework');
+      if (deployment) {
+        deployment.framework = buildPlan.framework;
+        deployment.frameworkVersion = buildPlan.frameworkVersion;
+        await deployment.save();
+      }
+      logLines.push(`[Azure] Framework: ${buildPlan.framework}`);
+
+      await emitLog(io, socketId, `[Azure] Building image ${fullImage}...`, deployment, 'docker');
+
+      if (activeItem.cancelled) throw new Error('Deployment cancelled by user');
+
+      let buildLogQueue = Promise.resolve();
+      await runCommand('docker', ['build', '-t', fullImage, '.'], { cwd: cloneDir }, (line) => {
+        buildLogQueue = buildLogQueue.then(() => emitLog(io, socketId, line, deployment, 'docker'));
         logLines.push(line);
       }, activeItem);
-      await loginLogQueue;
+      await buildLogQueue;
+
+      if (activeItem.cancelled) throw new Error('Deployment cancelled by user');
+
+      if (deployment) {
+        deployment.infrastructure = deployment.infrastructure || {};
+        deployment.infrastructure.acr = deployment.infrastructure.acr || {};
+        deployment.infrastructure.acr.imageUri = fullImage;
+        deployment.infrastructure.acr.imageTag = deploymentId;
+        deployment.infrastructure.acr.imageName = sanitizedName;
+        await deployment.save();
+      }
+
+      if (cfg.acrUsername && cfg.acrPassword) {
+        await emitLog(io, socketId, '[Azure] Logging into ACR...', deployment, 'acr');
+
+        let loginLogQueue = Promise.resolve();
+        await runCommand('docker', ['login', cfg.acrLoginServer, '-u', cfg.acrUsername, '-p', cfg.acrPassword], {}, (line) => {
+          loginLogQueue = loginLogQueue.then(() => emitLog(io, socketId, line, deployment, 'acr'));
+          logLines.push(line);
+        }, activeItem);
+        await loginLogQueue;
+      }
+
+      if (activeItem.cancelled) throw new Error('Deployment cancelled by user');
+
+      await emitLog(io, socketId, '[Azure] Pushing image to ACR...', deployment, 'acr');
+
+      let pushLogQueue = Promise.resolve();
+      await runCommand('docker', ['push', fullImage], {}, (line) => {
+        pushLogQueue = pushLogQueue.then(() => emitLog(io, socketId, line, deployment, 'acr'));
+        logLines.push(line);
+      }, activeItem);
+      await pushLogQueue;
+
+      await emitLog(io, socketId, 'Image pushed to ACR successfully', deployment, 'acr', 'success');
     }
-
-    if (activeItem.cancelled) throw new Error('Deployment cancelled by user');
-
-    await emitLog(io, socketId, '[Azure] Pushing image to ACR...', deployment, 'acr');
-
-    let pushLogQueue = Promise.resolve();
-    await runCommand('docker', ['push', fullImage], {}, (line) => {
-      pushLogQueue = pushLogQueue.then(() => emitLog(io, socketId, line, deployment, 'acr'));
-      logLines.push(line);
-    }, activeItem);
-    await pushLogQueue;
-
-    await emitLog(io, socketId, 'Image pushed to ACR successfully', deployment, 'acr', 'success');
 
     if (activeItem.cancelled) throw new Error('Deployment cancelled by user');
 
@@ -433,7 +526,12 @@ async function runAzureDeployment({
       Object.assign(envMap, environmentVariables);
     }
 
-    const containerPort = buildPlan?.containerPort || DEFAULT_CONTAINER_PORT;
+    if (envMap.PORT) {
+      const explicitPort = parseInt(envMap.PORT, 10);
+      if (!Number.isNaN(explicitPort) && explicitPort > 0) {
+        containerPort = explicitPort;
+      }
+    }
 
     const aciResult = await runAciViaPython({
       deploymentId,
@@ -468,6 +566,7 @@ async function runAzureDeployment({
       deployment.status = 'success';
       deployment.phase = 'complete';
       deployment.completedAt = new Date();
+      deployment.markModified('infrastructure');
     }
 
     const summary = {
@@ -567,13 +666,38 @@ async function manageAciLifecycle({ action, groupName }) {
   }
 }
 
+function resolveAzureContainerGroupName(deployment) {
+  if (deployment?.infrastructure?.aci?.containerGroupName) {
+    return deployment.infrastructure.aci.containerGroupName;
+  }
+  if (deployment?.metadata?.containerName) {
+    return deployment.metadata.containerName;
+  }
+  const url = deployment?.publicUrl || deployment?.domainUrl || deployment?.infrastructure?.liveUrl || '';
+  const match = url.match(/https?:\/\/(cg-[a-zA-Z0-9-]+)\./);
+  if (match) {
+    return match[1];
+  }
+  return null;
+}
+
+function findDeploymentByIdOrKey(id) {
+  if (!id) return Promise.resolve(null);
+  const strId = String(id);
+  const isObjectId = mongoose.Types.ObjectId.isValid(strId) && strId.length === 24;
+  return Deployment.findOne({
+    $or: [
+      isObjectId ? { _id: strId } : null,
+      { deploymentId: strId },
+    ].filter(Boolean),
+  });
+}
+
 async function cancelAzureDeployment(deploymentId, io) {
   const deploymentKey = String(deploymentId);
   const activeItem = activeDeployments.get(deploymentKey);
 
-  const deployment = await Deployment.findOne({
-    $or: [{ _id: deploymentId.match(/^[0-9a-fA-F]{24}$/) ? deploymentId : null }, { deploymentId }],
-  });
+  const deployment = await findDeploymentByIdOrKey(deploymentId);
 
   if (activeItem) {
     activeItem.cancelled = true;
@@ -583,13 +707,19 @@ async function cancelAzureDeployment(deploymentId, io) {
     if (activeItem.containerGroupName) {
       manageAciLifecycle({ action: 'delete', groupName: activeItem.containerGroupName }).catch(() => {});
     }
+    if (activeItem.builderGroup) {
+      manageAciLifecycle({ action: 'delete', groupName: activeItem.builderGroup }).catch(() => {});
+    }
+    if (activeItem.blobName) {
+      blobBuildService.deleteBuildBlob(activeItem.blobName).catch(() => {});
+    }
     if (activeItem.cloneDir) safeRemove(activeItem.cloneDir).catch(() => {});
     if (activeItem.artifactsDir) safeRemove(activeItem.artifactsDir).catch(() => {});
     activeDeployments.delete(deploymentKey);
   }
 
   if (deployment) {
-    const groupName = deployment.infrastructure?.aci?.containerGroupName;
+    const groupName = resolveAzureContainerGroupName(deployment);
     if (groupName && (!activeItem || !activeItem.containerGroupName)) {
       manageAciLifecycle({ action: 'delete', groupName }).catch(() => {});
     }
@@ -607,12 +737,10 @@ async function cancelAzureDeployment(deploymentId, io) {
 }
 
 async function stopAzureDeployment(deploymentId, io) {
-  const deployment = await Deployment.findOne({
-    $or: [{ _id: deploymentId.match(/^[0-9a-fA-F]{24}$/) ? deploymentId : null }, { deploymentId }],
-  });
+  const deployment = await findDeploymentByIdOrKey(deploymentId);
   if (!deployment) throw new Error('Deployment not found');
 
-  const groupName = deployment.infrastructure?.aci?.containerGroupName || deployment.metadata?.containerName;
+  const groupName = resolveAzureContainerGroupName(deployment);
   if (!groupName) throw new Error('No Azure Container Group found for this deployment');
 
   await emitLog(io, null, `[Azure] Suspending container group ${groupName}...`, deployment, 'aci');
@@ -621,6 +749,7 @@ async function stopAzureDeployment(deploymentId, io) {
   deployment.status = 'stopped';
   if (deployment.infrastructure?.aci) {
     deployment.infrastructure.aci.status = 'stopped';
+    deployment.markModified('infrastructure');
   }
   await deployment.save();
 
@@ -630,12 +759,10 @@ async function stopAzureDeployment(deploymentId, io) {
 }
 
 async function startAzureDeployment(deploymentId, io) {
-  const deployment = await Deployment.findOne({
-    $or: [{ _id: deploymentId.match(/^[0-9a-fA-F]{24}$/) ? deploymentId : null }, { deploymentId }],
-  });
+  const deployment = await findDeploymentByIdOrKey(deploymentId);
   if (!deployment) throw new Error('Deployment not found');
 
-  const groupName = deployment.infrastructure?.aci?.containerGroupName || deployment.metadata?.containerName;
+  const groupName = resolveAzureContainerGroupName(deployment);
   if (!groupName) throw new Error('No Azure Container Group found for this deployment');
 
   await emitLog(io, null, `[Azure] Resuming container group ${groupName}...`, deployment, 'aci');
@@ -644,6 +771,7 @@ async function startAzureDeployment(deploymentId, io) {
   deployment.status = 'success';
   if (deployment.infrastructure?.aci) {
     deployment.infrastructure.aci.status = 'running';
+    deployment.markModified('infrastructure');
   }
   await deployment.save();
 
@@ -653,26 +781,47 @@ async function startAzureDeployment(deploymentId, io) {
 }
 
 async function deleteAzureDeployment(deploymentId, io) {
-  const deployment = await Deployment.findOne({
-    $or: [{ _id: deploymentId.match(/^[0-9a-fA-F]{24}$/) ? deploymentId : null }, { deploymentId }],
-  });
+  const deployment = await findDeploymentByIdOrKey(deploymentId);
   if (!deployment) throw new Error('Deployment not found');
 
-  const groupName = deployment.infrastructure?.aci?.containerGroupName || deployment.metadata?.containerName;
+  const groupName = resolveAzureContainerGroupName(deployment);
   if (groupName) {
     await emitLog(io, null, `[Azure] Terminating container group ${groupName}...`, deployment, 'aci');
     await manageAciLifecycle({ action: 'delete', groupName });
   }
 
+  // If azure-static, purge the files from $web container in Azure Storage
+  const isAzureStatic = deployment.deploymentService === 'azure-static' ||
+    deployment.infrastructure?.targetType === 'azure-static' ||
+    Boolean(deployment.infrastructure?.s3?.bucket === '$web') ||
+    Boolean(deployment.publicUrl && deployment.publicUrl.includes('.web.core.windows.net'));
+
+  if (isAzureStatic) {
+    const siteSlug = deployment.infrastructure?.s3?.siteSlug ||
+      deployment.infrastructure?.s3?.prefix ||
+      (deployment.publicUrl ? deployment.publicUrl.match(/core\.windows\.net\/([^/]+)/)?.[1] : null);
+    if (siteSlug) {
+      try {
+        const azureStaticService = require('./azureStaticService');
+        await emitLog(io, null, `[Azure] Deleting static files from storage account under /${siteSlug}...`, deployment, 'storage');
+        const count = await azureStaticService.deleteDirectory(siteSlug);
+        await emitLog(io, null, `[Azure] Purged ${count} files from static hosting storage.`, deployment, 'storage', 'success');
+      } catch (err) {
+        console.warn(`[Azure] Could not delete $web prefix ${siteSlug}:`, err.message);
+      }
+    }
+  }
+
   deployment.status = 'closed';
   if (deployment.infrastructure?.aci) {
     deployment.infrastructure.aci.status = 'deleted';
+    deployment.markModified('infrastructure');
   }
   deployment.publicUrl = null;
   deployment.domainUrl = null;
   await deployment.save();
 
-  await emitLog(io, null, `[Azure] Deployment terminated and container group deleted.`, deployment, 'aci', 'success');
+  await emitLog(io, null, `[Azure] Deployment terminated and resources deleted.`, deployment, 'aci', 'success');
   io?.to(`deployment:${deployment._id}`).emit('deployment:terminated', { deploymentId: deployment._id, status: 'closed' });
   return { success: true, status: 'closed', groupName };
 }

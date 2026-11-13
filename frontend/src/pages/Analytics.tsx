@@ -7,8 +7,8 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  Legend,
   Line,
-  LineChart,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -78,18 +78,17 @@ const formatDuration = (ms = 0) => {
   return `${minutes}m ${remaining}s`;
 };
 
-const formatUsd = (value = 0) => `$${value.toFixed(4)}`;
-
 const chartTooltipStyle = {
   background: 'hsl(var(--popover))',
   border: '1px solid hsl(var(--border))',
   borderRadius: 0,
   color: 'hsl(var(--popover-foreground))',
+  fontSize: 12,
+  padding: '8px 10px',
 };
 
 export default function AnalyticsPage(){
   const [days, setDays] = useState(30);
-  const isDark = true;
   const tooltipStyle = chartTooltipStyle;
   const queryParams = useMemo(() => ({ days }), [days]);
 
@@ -178,7 +177,7 @@ export default function AnalyticsPage(){
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
             <div className="space-y-6 lg:col-span-2">
               <div id="analytics-trends" className="scroll-mt-20">
-              <ChartContainer title="Deployment trend" description="Daily success vs failure">
+              <ChartContainer className="dark-chart" title="Deployment trend" description="Daily success vs failure">
                 <div style={{ width: '100%', height: 260 }}>
                   <ResponsiveContainer>
                     <AreaChart data={dashboard.deploymentTrend || []}>
@@ -188,10 +187,22 @@ export default function AnalyticsPage(){
                           <stop offset="100%" stopColor="hsl(var(--chart-1))" stopOpacity={0.05} />
                         </linearGradient>
                       </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke={isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'} />
-                      <XAxis dataKey="date" tick={{ fill: isDark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.5)', fontSize: 11 }} />
-                      <YAxis tick={{ fill: isDark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.5)', fontSize: 11 }} />
-                      <Tooltip contentStyle={tooltipStyle} />
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.10)" />
+                      <XAxis
+                        dataKey="date"
+                        tick={{ fill: '#B8B8B8', fontSize: 11 }}
+                        tickLine={{ stroke: '#737373' }}
+                        axisLine={{ stroke: '#525252' }}
+                        minTickGap={24}
+                      />
+                      <YAxis
+                        tick={{ fill: '#B8B8B8', fontSize: 11 }}
+                        tickLine={{ stroke: '#737373' }}
+                        axisLine={{ stroke: '#525252' }}
+                        width={38}
+                      />
+                      <Tooltip contentStyle={tooltipStyle} labelStyle={{ color: '#F5F5F5' }} itemStyle={{ color: '#D4D4D4' }} />
+                      <Legend wrapperStyle={{ color: '#D4D4D4', fontSize: 11, paddingTop: 8 }} />
                       <Area type="monotone" dataKey="count" stroke="hsl(var(--chart-1))" fill="url(#trendGradient)" strokeWidth={2} />
                       <Line type="monotone" dataKey="success" stroke="hsl(var(--success))" strokeWidth={2} dot={false} />
                       <Line type="monotone" dataKey="failed" stroke="hsl(var(--destructive))" strokeWidth={2} dot={false} />
@@ -203,29 +214,56 @@ export default function AnalyticsPage(){
             </div>
 
             <div className="space-y-6">
-              <ChartContainer title="Status distribution">
+              <ChartContainer className="dark-chart" title="Status distribution">
                 <div style={{ width: '100%', height: 220 }}>
                   <ResponsiveContainer>
                     <PieChart>
-                      <Pie data={dashboard.statusBreakdown || []} dataKey="count" nameKey="status" cx="50%" cy="50%" outerRadius={80} label>
+                      <Pie data={dashboard.statusBreakdown || []} dataKey="count" nameKey="status" cx="50%" cy="50%" outerRadius={76}>
                         {(dashboard.statusBreakdown || []).map((entry, index) => (
                           <Cell key={`${entry.status}-${index}`} fill={STATUS_COLORS[entry.status] || STATUS_COLORS.default} />
                         ))}
                       </Pie>
-                      <Tooltip contentStyle={tooltipStyle} />
+                      <Tooltip contentStyle={tooltipStyle} labelStyle={{ color: '#F5F5F5' }} itemStyle={{ color: '#D4D4D4' }} />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
+                <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 border-t border-white/10 pt-3">
+                  {(dashboard.statusBreakdown || []).map((entry, index) => (
+                    <div key={`${entry.status}-legend-${index}`} className="flex min-w-0 items-center gap-2 text-xs">
+                      <span
+                        aria-hidden="true"
+                        className="h-2 w-2 shrink-0"
+                        style={{ backgroundColor: STATUS_COLORS[entry.status] || STATUS_COLORS.default }}
+                      />
+                      <span className="min-w-0 truncate capitalize text-neutral-300">{entry.status}</span>
+                      <span className="ml-auto font-mono text-neutral-100">{entry.count}</span>
+                    </div>
+                  ))}
+                </div>
               </ChartContainer>
 
-              <ChartContainer title="Framework usage">
+              <ChartContainer className="dark-chart" title="Framework usage">
                 <div style={{ width: '100%', height: 220 }}>
                   <ResponsiveContainer>
                     <BarChart data={dashboard.frameworkBreakdown || []}>
-                      <CartesianGrid strokeDasharray="3 3" stroke={isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'} />
-                      <XAxis dataKey="framework" tick={{ fill: isDark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.5)', fontSize: 11 }} />
-                      <YAxis tick={{ fill: isDark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.5)', fontSize: 11 }} />
-                      <Tooltip contentStyle={tooltipStyle} />
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.10)" />
+                      <XAxis
+                        dataKey="framework"
+                        tick={{ fill: '#B8B8B8', fontSize: 10 }}
+                        tickLine={{ stroke: '#737373' }}
+                        axisLine={{ stroke: '#525252' }}
+                        interval={0}
+                        angle={-20}
+                        textAnchor="end"
+                        height={54}
+                      />
+                      <YAxis
+                        tick={{ fill: '#B8B8B8', fontSize: 11 }}
+                        tickLine={{ stroke: '#737373' }}
+                        axisLine={{ stroke: '#525252' }}
+                        width={38}
+                      />
+                      <Tooltip contentStyle={tooltipStyle} labelStyle={{ color: '#F5F5F5' }} itemStyle={{ color: '#D4D4D4' }} />
                       <Bar dataKey="count" fill="hsl(var(--chart-1))" />
                     </BarChart>
                   </ResponsiveContainer>

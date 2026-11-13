@@ -17,6 +17,7 @@ import {
   Play,
   Power,
   Trash2,
+  X,
 } from 'lucide-react';
 import { deploymentService } from '@/services/auth-service';
 import { resolveDeploymentProvider } from '@/lib/application-types';
@@ -429,16 +430,11 @@ export default function DeploymentDetailPage() {
   const deploymentInstanceId = infrastructure?.ec2?.instanceId || (deployment?.metadata as any)?.ec2InstanceId || '';
   const isCloudOpsContainer = !isStaticDeployment && !isAwsDeployment && !isAzureDeployment;
   const canCancel = ['pending', 'queued', 'cloning', 'detecting', 'building', 'pushing', 'deploying'].includes(status);
-  const canStopContainer = ['success', 'running'].includes(status) && (
-    (isCloudOpsContainer && containerName !== 'Pending') ||
-    (isAzureDeployment && azureAciContainerGroup !== 'Pending')
-  );
-  const canRestartContainer = status === 'stopped' && (
-    (isCloudOpsContainer && containerName !== 'Pending') ||
-    (isAzureDeployment && azureAciContainerGroup !== 'Pending')
-  );
-  const canTerminateAws = isAwsDeployment && ['success', 'running'].includes(status) && Boolean(deploymentInstanceId);
-  const canTerminateAzure = isAzureDeployment && ['success', 'running', 'stopped', 'failed'].includes(status) && azureAciContainerGroup !== 'Pending';
+  const canStopContainer = ['success', 'running'].includes(status) && !isStaticDeployment;
+  const canRestartContainer = status === 'stopped' && !isStaticDeployment;
+  const canTerminateAws = isAwsDeployment && ['success', 'running', 'stopped', 'failed', 'cancelled'].includes(status) && Boolean(deploymentInstanceId);
+  const canTerminateAzure = isAzureDeployment && ['success', 'running', 'stopped', 'failed', 'cancelled'].includes(status);
+  const canTerminateGeneric = !isAzureDeployment && !isAwsDeployment && ['success', 'running', 'stopped', 'failed', 'cancelled'].includes(status);
 
   const focusSection = (sectionId: string, requiresMetadata = false) => {
     if (requiresMetadata) setShowMetadata(true);
@@ -496,7 +492,11 @@ export default function DeploymentDetailPage() {
           : current);
         setActionMessage(isAzureDeployment ? 'Azure container resumed and running.' : 'Deployment restarted.');
       } else if (action === 'terminate') {
-        await deploymentService.terminateAzureDeployment(deploymentKey);
+        if (isAzureDeployment) {
+          await deploymentService.terminateAzureDeployment(deploymentKey);
+        } else {
+          await deploymentService.delete(deploymentKey);
+        }
         setDeployment((current) => current
           ? {
               ...current,
@@ -512,7 +512,7 @@ export default function DeploymentDetailPage() {
               },
             }
           : current);
-        setActionMessage('Azure Container Group terminated and removed.');
+        setActionMessage(isAzureDeployment ? 'Azure Container Group terminated and removed.' : 'Deployment terminated and closed.');
       }
     } catch (actionError: any) {
       setError(actionError?.response?.data?.error || actionError?.message || `Unable to ${action} deployment.`);
@@ -664,185 +664,85 @@ export default function DeploymentDetailPage() {
                           Live URL pending
                         </div>
                       )}
-                    {canCancel && (
-                      <button
-                        type="button"
-                        disabled={lifecycleBusy}
-                        onClick={() => setConfirmLifecycleAction('cancel')}
-                        className="inline-flex items-center gap-1.5 border border-amber-400/40 bg-amber-400/[0.08] px-3 py-2 text-xs font-medium text-amber-300 transition hover:bg-amber-400/15 disabled:opacity-50"
-                        title="Cancel deployment"
-                      >
-                        <Ban className="h-3.5 w-3.5" />
-                        Cancel
-                      </button>
-                    )}
-                    {canStopContainer && isAzureDeployment && (
-                      <button
-                        type="button"
-                        disabled={lifecycleBusy}
-                        onClick={() => setConfirmLifecycleAction('stop')}
-                        className="inline-flex items-center gap-1.5 border border-amber-400/40 bg-amber-400/[0.08] px-3 py-2 text-xs font-medium text-amber-300 transition hover:bg-amber-400/15 disabled:opacity-50"
-                        title="Pause Azure container to suspend per-second compute billing"
-                      >
-                        <Pause className="h-3.5 w-3.5" />
-                        Pause Compute
-                      </button>
-                    )}
-                    {canRestartContainer && isAzureDeployment && (
-                      <button
-                        type="button"
-                        disabled={lifecycleBusy}
-                        onClick={() => setConfirmLifecycleAction('restart')}
-                        className="inline-flex items-center gap-1.5 border border-emerald-400/40 bg-emerald-400/[0.08] px-3 py-2 text-xs font-medium text-emerald-300 transition hover:bg-emerald-400/15 disabled:opacity-50"
-                        title="Resume suspended Azure container"
-                      >
-                        <Play className="h-3.5 w-3.5" />
-                        Resume
-                      </button>
-                    )}
-                    {canTerminateAzure && (
-                      <button
-                        type="button"
-                        disabled={lifecycleBusy}
-                        onClick={() => setConfirmLifecycleAction('terminate')}
-                        className="inline-flex items-center gap-1.5 border border-destructive/40 bg-destructive/[0.08] px-3 py-2 text-xs font-medium text-destructive transition hover:bg-destructive/15 disabled:opacity-50"
-                        title="Terminate Azure container group"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                        Terminate
-                      </button>
-                    )}
-                    {(canCancel || canStopContainer || canRestartContainer || canTerminateAws || canTerminateAzure) && (
-                      <details className="relative">
-                        <summary className="flex h-10 cursor-pointer list-none items-center gap-2 border border-white/10 bg-[#101010] px-3 text-xs font-medium text-neutral-300 transition hover:border-white/25 hover:text-white">
-                          <Power className="h-3.5 w-3.5" />
-                          Manage
-                          <ChevronDown className="h-3 w-3 text-neutral-600" />
-                        </summary>
-                        <div className="absolute right-0 top-full z-20 mt-1 w-64 border border-white/10 bg-[#101010] p-2 shadow-xl">
-                          {canCancel && (
-                            <button
-                              type="button"
-                              disabled={lifecycleBusy}
-                              onClick={() => setConfirmLifecycleAction('cancel')}
-                              className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-amber-300 transition hover:bg-white/[0.04] disabled:opacity-50"
-                            >
-                              <Ban className="h-3.5 w-3.5" />
-                              Cancel deployment
-                            </button>
+                      {canCancel && (
+                        <button
+                          type="button"
+                          disabled={lifecycleBusy}
+                          onClick={() => setConfirmLifecycleAction('cancel')}
+                          className="inline-flex items-center gap-2 border border-amber-400/40 bg-amber-400/10 px-3.5 py-2 text-xs font-medium text-amber-300 transition hover:bg-amber-400/20 disabled:opacity-50"
+                        >
+                          {lifecycleBusy && confirmLifecycleAction === 'cancel' ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Ban className="h-3.5 w-3.5" />
                           )}
-                          {canStopContainer && (
-                            <button
-                              type="button"
-                              disabled={lifecycleBusy}
-                              onClick={() => setConfirmLifecycleAction('stop')}
-                              className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-neutral-300 transition hover:bg-white/[0.04] disabled:opacity-50"
-                              >
-                              <Pause className="h-3.5 w-3.5" />
-                              {isAzureDeployment ? 'Pause compute (suspend billing)' : 'Stop container'}
-                            </button>
+                          Cancel deployment
+                        </button>
+                      )}
+
+                      {canStopContainer && (
+                        <button
+                          type="button"
+                          disabled={lifecycleBusy}
+                          onClick={() => setConfirmLifecycleAction('stop')}
+                          className="inline-flex items-center gap-2 border border-amber-400/30 bg-[#141414] px-3.5 py-2 text-xs font-medium text-amber-300 transition hover:bg-amber-400/10 disabled:opacity-50"
+                        >
+                          {lifecycleBusy && confirmLifecycleAction === 'stop' ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Pause className="h-3.5 w-3.5" />
                           )}
-                          {canRestartContainer && (
-                            <button
-                              type="button"
-                              disabled={lifecycleBusy}
-                              onClick={() => setConfirmLifecycleAction('restart')}
-                              className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-emerald-300 transition hover:bg-white/[0.04] disabled:opacity-50"
-                            >
-                              <Play className="h-3.5 w-3.5" />
-                              {isAzureDeployment ? 'Resume container' : 'Restart container'}
-                            </button>
+                          {isAzureDeployment ? 'Pause compute ($0/hr)' : 'Stop container'}
+                        </button>
+                      )}
+
+                      {canRestartContainer && (
+                        <button
+                          type="button"
+                          disabled={lifecycleBusy}
+                          onClick={() => setConfirmLifecycleAction('restart')}
+                          className="inline-flex items-center gap-2 border border-emerald-400/40 bg-emerald-400/10 px-3.5 py-2 text-xs font-medium text-emerald-300 transition hover:bg-emerald-400/20 disabled:opacity-50"
+                        >
+                          {lifecycleBusy && confirmLifecycleAction === 'restart' ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Play className="h-3.5 w-3.5" />
                           )}
-                          {canTerminateAzure && (
-                            <button
-                              type="button"
-                              disabled={lifecycleBusy}
-                              onClick={() => setConfirmLifecycleAction('terminate')}
-                              className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-destructive transition hover:bg-white/[0.04] disabled:opacity-50"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                              Terminate Azure resources
-                            </button>
+                          {isAzureDeployment ? 'Resume container' : 'Restart container'}
+                        </button>
+                      )}
+
+                      {(canTerminateAzure || canTerminateGeneric) && (
+                        <button
+                          type="button"
+                          disabled={lifecycleBusy}
+                          onClick={() => setConfirmLifecycleAction('terminate')}
+                          className="inline-flex items-center gap-2 border border-destructive/40 bg-destructive/10 px-3.5 py-2 text-xs font-medium text-destructive transition hover:bg-destructive/20 disabled:opacity-50"
+                        >
+                          {lifecycleBusy && confirmLifecycleAction === 'terminate' ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-3.5 w-3.5" />
                           )}
-                          {canTerminateAws && (
-                            <button
-                              type="button"
-                              disabled={bringingDown}
-                              onClick={() => setBringDownConfirmOpen(true)}
-                              className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-destructive transition hover:bg-white/[0.04] disabled:opacity-50"
-                            >
-                              <Power className="h-3.5 w-3.5" />
-                              Terminate AWS resources
-                            </button>
+                          {isAzureDeployment ? 'Terminate Azure' : 'Terminate'}
+                        </button>
+                      )}
+
+                      {canTerminateAws && (
+                        <button
+                          type="button"
+                          disabled={bringingDown}
+                          onClick={() => setBringDownConfirmOpen(true)}
+                          className="inline-flex items-center gap-2 border border-destructive/40 bg-destructive/10 px-3.5 py-2 text-xs font-medium text-destructive transition hover:bg-destructive/20 disabled:opacity-50"
+                        >
+                          {bringingDown ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Power className="h-3.5 w-3.5" />
                           )}
-                          {confirmLifecycleAction && (
-                            <div className="mt-2 border-t border-white/[0.07] px-3 py-3">
-                              <p className="text-xs leading-5 text-neutral-400">
-                                {confirmLifecycleAction === 'cancel'
-                                  ? 'Cancel this deployment and terminate in-progress build or provisioning?'
-                                  : confirmLifecycleAction === 'stop'
-                                    ? (isAzureDeployment ? 'Suspend this Azure container? Compute billing will stop ($0/hr) while retaining configuration and image.' : 'Stop the running container? Its image and deployment record will be kept.')
-                                    : confirmLifecycleAction === 'restart'
-                                      ? (isAzureDeployment ? 'Resume this suspended Azure container?' : 'Restart the stopped container?')
-                                      : 'Permanently delete this Azure Container Group from your subscription?'}
-                              </p>
-                              <div className="mt-3 flex gap-2">
-                                <button
-                                  type="button"
-                                  disabled={lifecycleBusy}
-                                  onClick={() => void runLifecycleAction(confirmLifecycleAction)}
-                                  className={`px-2.5 py-1.5 text-[10px] font-medium disabled:opacity-50 ${
-                                    confirmLifecycleAction === 'terminate'
-                                      ? 'border border-destructive/40 bg-destructive/10 text-destructive'
-                                      : confirmLifecycleAction === 'stop'
-                                        ? 'border border-amber-400/40 bg-amber-400/10 text-amber-300'
-                                        : 'border border-primary/40 bg-primary/10 text-primary'
-                                  }`}
-                                >
-                                  {lifecycleBusy ? 'Working…' : confirmLifecycleAction === 'terminate' ? 'Confirm termination' : 'Confirm'}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setConfirmLifecycleAction(null)}
-                                  className="border border-white/10 px-2.5 py-1.5 text-[10px] text-neutral-400 hover:text-white"
-                                >
-                                  Keep as is
-                                </button>
-                              </div>
-                            </div>
-                          )}
-                          {bringDownConfirmOpen && (
-                            <div className="mt-2 border-t border-white/[0.07] px-3 py-3">
-                              <p className="text-xs leading-5 text-destructive">
-                                Terminate the EC2 instance and clean up the ECR repository?
-                              </p>
-                              <div className="mt-3 flex gap-2">
-                                <button
-                                  type="button"
-                                  disabled={bringingDown}
-                                  onClick={() => void handleBringDown()}
-                                  className="border border-destructive/40 bg-destructive/[0.06] px-2.5 py-1.5 text-[10px] font-medium text-destructive disabled:opacity-50"
-                                >
-                                  {bringingDown ? 'Terminating…' : 'Confirm termination'}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setBringDownConfirmOpen(false)}
-                                  className="border border-white/10 px-2.5 py-1.5 text-[10px] text-neutral-400 hover:text-white"
-                                >
-                                  Cancel
-                                </button>
-                              </div>
-                            </div>
-                          )}
-                          {!canCancel && !canStopContainer && !canRestartContainer && !canTerminateAws && !canTerminateAzure && (
-                            <p className="px-3 py-2 text-xs leading-5 text-neutral-500">
-                              No lifecycle actions are available for this deployment state.
-                            </p>
-                          )}
-                        </div>
-                      </details>
-                    )}
+                          Terminate AWS
+                        </button>
+                      )}
                   </div>
                   </div>
 
@@ -1156,6 +1056,153 @@ export default function DeploymentDetailPage() {
             </div>
           )}
         </div>
+
+        {/* Lifecycle Action Modal */}
+        {confirmLifecycleAction && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div
+              className="absolute inset-0 bg-black/75 backdrop-blur-sm"
+              onClick={() => !lifecycleBusy && setConfirmLifecycleAction(null)}
+            />
+            <div className="relative z-10 w-full max-w-md rounded-2xl border border-white/10 bg-[#0E0E0E] p-6 shadow-2xl">
+              <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                <h3 className="text-base font-semibold text-white">
+                  {confirmLifecycleAction === 'cancel'
+                    ? 'Cancel Deployment'
+                    : confirmLifecycleAction === 'stop'
+                      ? (isAzureDeployment ? 'Pause Compute (Suspend Billing)' : 'Stop Container')
+                      : confirmLifecycleAction === 'restart'
+                        ? (isAzureDeployment ? 'Resume Container' : 'Restart Container')
+                        : 'Terminate Deployment & Resources'}
+                </h3>
+                <button
+                  type="button"
+                  disabled={lifecycleBusy}
+                  onClick={() => setConfirmLifecycleAction(null)}
+                  className="text-neutral-400 hover:text-white"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="mt-4 text-xs leading-relaxed text-neutral-300">
+                {confirmLifecycleAction === 'cancel' && (
+                  <p>
+                    Are you sure you want to cancel this deployment? Any active build, push, or container provisioning jobs will be aborted immediately.
+                  </p>
+                )}
+                {confirmLifecycleAction === 'stop' && (
+                  <p>
+                    {isAzureDeployment
+                      ? 'Suspending this Azure Container Group stops compute billing ($0/hr). Your Docker image in ACR and configuration are retained so you can resume anytime.'
+                      : 'Stopping this container will halt execution while preserving the deployment record and build artifact.'}
+                  </p>
+                )}
+                {confirmLifecycleAction === 'restart' && (
+                  <p>
+                    {isAzureDeployment
+                      ? 'Resume this suspended Azure container? Compute will begin running again and your application will be reachable at its public URL.'
+                      : 'Restart this container to resume running the application.'}
+                  </p>
+                )}
+                {confirmLifecycleAction === 'terminate' && (
+                  <div className="space-y-2">
+                    <p className="font-semibold text-destructive">
+                      This action is permanent and cannot be undone.
+                    </p>
+                    <p>
+                      {isAzureDeployment
+                        ? 'This will permanently delete the Azure Container Group from your Azure subscription. Any ephemeral container state will be lost.'
+                        : 'This will permanently terminate and delete this deployment resource.'}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-6 flex justify-end gap-3 border-t border-white/10 pt-4">
+                <button
+                  type="button"
+                  disabled={lifecycleBusy}
+                  onClick={() => setConfirmLifecycleAction(null)}
+                  className="border border-white/10 bg-[#161616] px-4 py-2 text-xs font-medium text-neutral-300 hover:text-white"
+                >
+                  Keep as is
+                </button>
+                <button
+                  type="button"
+                  disabled={lifecycleBusy}
+                  onClick={() => void runLifecycleAction(confirmLifecycleAction)}
+                  className={`inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium disabled:opacity-50 ${
+                    confirmLifecycleAction === 'terminate'
+                      ? 'border border-destructive/50 bg-destructive text-destructive-foreground hover:bg-destructive/90'
+                      : confirmLifecycleAction === 'stop'
+                        ? 'border border-amber-400/50 bg-amber-500 text-black font-semibold hover:bg-amber-400'
+                        : confirmLifecycleAction === 'cancel'
+                          ? 'border border-amber-400/50 bg-amber-500 text-black font-semibold hover:bg-amber-400'
+                          : 'border border-emerald-400/50 bg-emerald-500 text-black font-semibold hover:bg-emerald-400'
+                  }`}
+                >
+                  {lifecycleBusy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  {confirmLifecycleAction === 'terminate'
+                    ? 'Confirm Termination'
+                    : confirmLifecycleAction === 'cancel'
+                      ? 'Confirm Cancel'
+                      : confirmLifecycleAction === 'stop'
+                        ? 'Confirm Pause'
+                        : 'Confirm Resume'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* AWS Bring Down Modal */}
+        {bringDownConfirmOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div
+              className="absolute inset-0 bg-black/75 backdrop-blur-sm"
+              onClick={() => !bringingDown && setBringDownConfirmOpen(false)}
+            />
+            <div className="relative z-10 w-full max-w-md rounded-2xl border border-white/10 bg-[#0E0E0E] p-6 shadow-2xl">
+              <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                <h3 className="text-base font-semibold text-white">Terminate AWS Resources</h3>
+                <button
+                  type="button"
+                  disabled={bringingDown}
+                  onClick={() => setBringDownConfirmOpen(false)}
+                  className="text-neutral-400 hover:text-white"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="mt-4 text-xs leading-relaxed text-destructive space-y-2">
+                <p className="font-semibold">This action cannot be undone.</p>
+                <p className="text-neutral-300">
+                  This will terminate the EC2 instance ({deploymentInstanceId}) and delete the associated ECR container image repository.
+                </p>
+              </div>
+              <div className="mt-6 flex justify-end gap-3 border-t border-white/10 pt-4">
+                <button
+                  type="button"
+                  disabled={bringingDown}
+                  onClick={() => setBringDownConfirmOpen(false)}
+                  className="border border-white/10 bg-[#161616] px-4 py-2 text-xs font-medium text-neutral-300 hover:text-white"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={bringingDown}
+                  onClick={() => void handleBringDown()}
+                  className="inline-flex items-center gap-1.5 border border-destructive/50 bg-destructive px-4 py-2 text-xs font-medium text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50"
+                >
+                  {bringingDown && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  Confirm Termination
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
     </>
   );

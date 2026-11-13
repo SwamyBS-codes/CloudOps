@@ -1,14 +1,35 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Loader2, Folder, File, ArrowLeft, CheckCircle2, Cloud, Server, Box, Globe, ExternalLink, GitBranch, Activity, ArrowUpRight, AlertTriangle, RotateCcw } from 'lucide-react';
-import { deploymentService, type ApplicationScanResult, type SuggestedRoot } from '../services/deployment-service';
+import { Loader2, Folder, ArrowLeft, CheckCircle2, Cloud, Server, Box, Globe, ExternalLink, GitBranch, Activity, ArrowUpRight, AlertTriangle, RotateCcw } from 'lucide-react';
+import { deploymentService, type ApplicationScanResult, type FileNode, type SuggestedRoot } from '../services/deployment-service';
 import StaticDeployPanel from '@/components/deployments/StaticDeployPanel';
 import ApplicationDeployPanel from '@/components/deployments/ApplicationDeployPanel';
+import RepositoryFileTree from '@/components/deployments/RepositoryFileTree';
 import { io, Socket } from 'socket.io-client';
 import { useToast } from '@/components/ui/ToastProvider';
 import { SOCKET_URL, DEPLOYED_PROJECTS_STORAGE_KEY } from '@/lib/constants';
 
-type FileNode = { name: string; type: 'file' | 'directory'; children?: FileNode[] };
+type SetupSection = 'repository' | 'runtime' | 'environment' | 'hosting' | 'review' | 'activity';
+
+const parseEnvironmentVariables = (content: string) => {
+  const values: Record<string, string> = {};
+  content.split(/\r?\n/).forEach((line, index) => {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) return;
+    const separator = trimmed.indexOf('=');
+    if (separator <= 0) throw new Error(`Environment variable on line ${index + 1} must use KEY=value format.`);
+    const key = trimmed.slice(0, separator).trim();
+    const value = trimmed.slice(separator + 1).trim();
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) {
+      throw new Error(`"${key}" on line ${index + 1} is not a valid environment variable name.`);
+    }
+    if (Object.prototype.hasOwnProperty.call(values, key)) {
+      throw new Error(`Environment variable "${key}" is listed more than once.`);
+    }
+    values[key] = value;
+  });
+  return values;
+};
 
 export default function DeployProject() {
   const { owner, repo } = useParams<{ owner: string, repo: string }>();
@@ -34,6 +55,7 @@ export default function DeployProject() {
   const [repositoryOwner, setRepositoryOwner] = useState('');
   const [repositoryUrl, setRepositoryUrl] = useState('');
   const [activeDeploymentId, setActiveDeploymentId] = useState('');
+  const [deploymentQueued, setDeploymentQueued] = useState(false);
   const [initError, setInitError] = useState<string | null>(null);
 
   // Deployment Type
@@ -52,6 +74,10 @@ export default function DeployProject() {
   // Socket & Logs
   const [logs, setLogs] = useState<{ id: number, text: string, type: string, time: string }[]>([]);
   const logsEndRef = useRef<HTMLDivElement>(null);
+  const repositoryDetailsRef = useRef<HTMLDetailsElement>(null);
+  const [activeSetupSection, setActiveSetupSection] = useState<SetupSection>('repository');
+  const [pendingSetupSection, setPendingSetupSection] = useState<SetupSection | null>(null);
+  const [azureEnvironmentVars, setAzureEnvironmentVars] = useState('');
 
   useEffect(() => {
     activeDeploymentIdRef.current = activeDeploymentId;
@@ -63,6 +89,22 @@ export default function DeployProject() {
   };
 
   useEffect(() => { logsEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [logs]);
+
+  useEffect(() => {
+    if (!pendingSetupSection) return;
+    if (pendingSetupSection === 'repository' && repositoryDetailsRef.current) {
+      repositoryDetailsRef.current.open = true;
+      repositoryDetailsRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else {
+      const target = document.querySelector<HTMLElement>(`[data-setup-section="${pendingSetupSection}"]`);
+      target?.scrollIntoView({
+        behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+        block: 'center',
+      });
+    }
+    setActiveSetupSection(pendingSetupSection);
+    setPendingSetupSection(null);
+  }, [pendingSetupSection, step]);
 
   const saveDeployedProject = (url: string) => {
     if (!owner || !repo) return;
@@ -134,12 +176,14 @@ export default function DeployProject() {
       if (completionHandledRef.current) return;
       if (status === 'failed') {
         completionHandledRef.current = true;
+        setDeploymentQueued(false);
         addLog(`❌ Deployment failed${error ? `: ${error}` : ''}`, 'error');
         notify({ title: 'Deployment failed', message: error || 'Check the logs for details.', variant: 'error' });
         setStep((prev) => (prev === 'deploying' ? 'review' : prev));
         return;
       }
       completionHandledRef.current = true;
+      setDeploymentQueued(true);
       addLog(`✅ Deployment completed successfully!`, 'success');
       if (url) {
         addLog(`🔗 Live URL: ${url}`, 'success');
@@ -228,21 +272,13 @@ export default function DeployProject() {
 
   const handleStartBuild = async () => {
     completionHandledRef.current = false;
+    setDeploymentQueued(false);
     setStep('deploying');
     const deploymentLabel = deploymentType === 'aws' ? 'AWS EC2' : deploymentType === 'azure' ? 'Azure ACI' : 'local';
     addLog(`🚀 Starting ${deploymentLabel} deployment...`, 'system');
 
     try {
       if (deploymentType === 'aws') {
-        // AWS Deployment
-        const envVars: Record<string, string> = {};
-        if (awsEnvironmentVars) {
-          awsEnvironmentVars.split('\n').forEach(line => {
-            const [key, value] = line.split('=');
-            if (key && value) envVars[key.trim()] = value.trim();
-          });
-        }
-
         addLog(`☁️  Pushing image to AWS ECR...`, 'info');
         const result = await deploymentService.startAWSDeployment({
           repositoryUrl,
@@ -250,22 +286,24 @@ export default function DeployProject() {
           repositoryOwner: owner || repositoryOwner,
           branch: 'main',
           instanceType: awsInstanceType,
-          environmentVariables: envVars,
+          environmentVariables: parseEnvironmentVariables(awsEnvironmentVars),
         });
 
+        setDeploymentQueued(true);
         addLog(`✅ AWS deployment initiated!`, 'success');
         addLog(`🆔 Deployment ID: ${result.deploymentId}`, 'info');
         setActiveDeploymentId(result.deploymentId);
         notify({ title: 'AWS deployment queued', message: 'Live logs will stream below.', variant: 'info' });
       } else if (deploymentType === 'azure') {
-        // Azure Deployment
         addLog(`☁️  Building Docker image and pushing to Azure Container Registry...`, 'info');
         const result = await deploymentService.startAzureDeployment({
           repoUrl: repositoryUrl,
           appName: azureAppName,
           socketId: socketRef.current?.id || '',
+          environmentVariables: parseEnvironmentVariables(azureEnvironmentVars),
         });
 
+        setDeploymentQueued(true);
         addLog(`✅ Azure deployment initiated!`, 'success');
         addLog(`🆔 App Name: ${azureAppName}`, 'info');
         if (result.message) addLog(result.message, 'info');
@@ -277,25 +315,21 @@ export default function DeployProject() {
       } else {
         // Local Deployment — env vars are passed to the build engine directly;
         // the engine auto-generates a Dockerfile when the repo lacks one.
-        const envVars: Record<string, string> = {};
-        envContent.split('\n').forEach(line => {
-          const [key, ...rest] = line.split('=');
-          if (key?.trim() && rest.length > 0) envVars[key.trim()] = rest.join('=').trim();
-        });
-
         addLog(`Starting build engine...`, 'system');
         const result = await deploymentService.startBuild({
           projectId,
           repositoryName: repo!,
           repositoryOwner,
-          environmentVariables: envVars,
+          environmentVariables: parseEnvironmentVariables(envContent),
         });
+        setDeploymentQueued(true);
         if (result.deploymentId) {
           setActiveDeploymentId(result.deploymentId);
         }
         notify({ title: 'Local deployment queued', message: 'Live logs will stream below.', variant: 'info' });
       }
     } catch (err: any) {
+      setDeploymentQueued(false);
       addLog(`❌ Error: ${err.message}`, 'error');
       notify({ title: 'Deployment failed to start', message: err.message, variant: 'error' });
       const stepMap: Record<string, typeof step> = {
@@ -308,15 +342,28 @@ export default function DeployProject() {
     }
   };
 
-  // Helper to render the File Tree recursively
-  const renderTree = (nodes: FileNode[], depth = 0) => {
-    return nodes.map((node, i) => (
-      <div key={i} style={{ paddingLeft: `${depth * 12}px` }} className="flex items-center gap-2 py-1 text-xs text-foreground hover:text-primary">
-        {node.type === 'directory' ? <Folder className="w-3.5 h-3.5 text-primary" /> : <File className="w-3.5 h-3.5 text-foreground/40" />}
-        <span>{node.name}</span>
-        {node.children && <div className="w-full mt-1">{renderTree(node.children, depth + 1)}</div>}
-      </div>
-    ));
+  const setupSections = [
+    { id: 'repository' as const, label: 'Repository', available: true },
+    { id: 'runtime' as const, label: 'Runtime', available: Boolean(applicationScan) && !['deploying', 'complete'].includes(step) },
+    { id: 'environment' as const, label: 'Environment', available: Boolean(applicationScan) && !['deploying', 'complete'].includes(step) },
+    { id: 'hosting' as const, label: 'Hosting target', available: Boolean(applicationScan) && !['deploying', 'complete'].includes(step) },
+    { id: 'review' as const, label: 'Review & deploy', available: Boolean(applicationScan) && !['deploying', 'complete'].includes(step) },
+    { id: 'activity' as const, label: 'Activity', available: true },
+  ];
+
+  const focusSetupSection = (sectionId: SetupSection) => {
+    if (step === 'deploying') return;
+    setActiveSetupSection(sectionId);
+    if (sectionId === 'runtime' || (sectionId === 'review' && step === 'type' && deploymentType !== 's3-static')) {
+      setStep('review');
+    } else if (sectionId === 'review' && deploymentType === 's3-static') {
+      setStep('s3-env');
+    } else if (sectionId === 'environment' && step !== 'review') {
+      setStep(deploymentType === 's3-static' ? 's3-env' : deploymentType === 'aws' ? 'aws' : deploymentType === 'azure' ? 'azure' : 'env');
+    } else if (sectionId === 'hosting') {
+      setStep('type');
+    }
+    setPendingSetupSection(sectionId);
   };
 
   return (
@@ -388,10 +435,41 @@ export default function DeployProject() {
           ))}
         </nav>
 
-      <div className="grid items-start gap-4 lg:grid-cols-[minmax(360px,0.9fr)_minmax(0,1.6fr)]">
+      <div className={`grid items-start gap-4 ${
+        step === 'deploying'
+          ? 'lg:grid-cols-[190px_minmax(0,1fr)]'
+          : 'lg:grid-cols-[150px_minmax(0,0.9fr)_minmax(0,1.6fr)]'
+      }`}>
+        <nav aria-label="Deployment setup sections" className="flex min-w-0 gap-1 overflow-x-auto border border-white/10 bg-[#0C0C0C] p-1 lg:sticky lg:top-4 lg:flex-col lg:overflow-visible lg:p-2">
+          <div className="hidden px-2 py-2 text-[9px] font-semibold uppercase tracking-[0.18em] text-neutral-600 lg:block">
+            {step === 'deploying' ? 'Setup progress' : 'Setup menu'}
+          </div>
+          {setupSections.map((section) => (
+            <button
+              key={section.id}
+              type="button"
+              disabled={!section.available || step === 'deploying'}
+              aria-current={step === 'deploying'
+                ? section.id === 'activity' ? 'location' : undefined
+                : activeSetupSection === section.id ? 'location' : undefined}
+              onClick={() => focusSetupSection(section.id)}
+              className={`flex shrink-0 items-center border-l-2 px-3 py-2.5 text-left text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-30 lg:w-full ${
+                (step === 'deploying' && section.id === 'activity') || (step !== 'deploying' && activeSetupSection === section.id)
+                  ? 'border-emerald-400 bg-emerald-400/[0.06] text-emerald-300'
+                  : 'border-transparent text-neutral-500 hover:bg-white/[0.03] hover:text-neutral-200'
+              }`}
+            >
+              {step === 'deploying' && section.id !== 'activity'
+                ? <CheckCircle2 className="mr-2 h-3.5 w-3.5 shrink-0 text-emerald-400" />
+                : null}
+              {section.label}
+            </button>
+          ))}
+        </nav>
+
         {/* SETUP */}
-        <section className="min-w-0 space-y-3">
-          <details className="group border border-white/10 bg-[#0C0C0C]">
+        {step !== 'deploying' && <section className="min-w-0 space-y-3">
+          <details ref={repositoryDetailsRef} className="group scroll-mt-20 border border-white/10 bg-[#0C0C0C]">
             <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-xs font-medium text-neutral-400 transition hover:text-white [&::-webkit-details-marker]:hidden">
               <Folder className="h-4 w-4 text-neutral-500" />
               <span>Repository files</span>
@@ -400,16 +478,18 @@ export default function DeployProject() {
               </span>
               <span className="text-neutral-600 transition-transform group-open:rotate-180">⌄</span>
             </summary>
-            <div className="max-h-56 overflow-y-auto border-t border-white/10 px-4 py-3">
-              {fileTree.length > 0 ? renderTree(fileTree) : (
-                <div className="text-xs italic text-neutral-500">Files will appear after the repository is ready.</div>
-              )}
+            <div className="border-t border-white/10 px-3 py-3">
+              <RepositoryFileTree
+                fileTree={fileTree}
+                rootDirectory={primaryRoot}
+                onSelectRoot={setPrimaryRoot}
+              />
             </div>
           </details>
 
           {/* Configuration Form */}
-          {(step === 'cloning' || step === 'review' || step === 'type' || step === 'env' || step === 'dockerfile' || step === 'aws' || step === 'azure' || step === 's3-folder' || step === 's3-framework' || step === 's3-env' || step === 'deploying') && (
-            <div className="min-w-0 border border-white/10 bg-[#0C0C0C] p-4 sm:p-5">
+          {(step === 'cloning' || step === 'review' || step === 'type' || step === 'env' || step === 'dockerfile' || step === 'aws' || step === 'azure' || step === 's3-folder' || step === 's3-framework' || step === 's3-env') && (
+            <div className="min-w-0 scroll-mt-20 border border-white/10 bg-[#0C0C0C] p-4 sm:p-5">
               {initError && (
                 <div className="mb-4 rounded-lg border border-destructive bg-destructive/10 p-4">
                   <div className="flex items-start gap-2 text-sm text-destructive">
@@ -450,7 +530,11 @@ export default function DeployProject() {
                   projectId={projectId}
                   primaryRoot={primaryRoot}
                   onPrimaryRootChange={setPrimaryRoot}
-                  onDeploying={() => setStep('deploying')}
+                  onDeploying={() => {
+                    setDeploymentQueued(false);
+                    setStep('deploying');
+                  }}
+                  onDeploymentQueued={() => setDeploymentQueued(true)}
                   onDeploymentStarted={(deploymentId) => {
                     setActiveDeploymentId(deploymentId);
                   }}
@@ -487,58 +571,56 @@ export default function DeployProject() {
               {step === 'type' && (
                 <>
                   <h3 className="text-sm font-bold mb-4">1. Select Deployment Type</h3>
-                  <div className="flex gap-3 mb-4 flex-wrap">
+                  <div data-setup-section="hosting" className="grid gap-2 scroll-mt-20 sm:grid-cols-2">
                     <button
                       type="button"
                       onClick={() => { setDeploymentType('local'); setStep('env'); }}
-                      className={`flex-1 min-w-[100px] flex items-center justify-center gap-2 p-3 rounded-lg font-medium transition ${
+                      className={`flex min-h-16 min-w-0 items-center gap-2 border p-3 text-left text-xs font-medium transition ${
                         deploymentType === 'local'
                           ? 'bg-primary/10 text-primary border border-primary'
-                          : 'bg-secondary text-muted-foreground border border-border hover:border-border'
+                          : 'bg-[#111111] text-neutral-400 border-white/10 hover:border-white/25 hover:text-white'
                       }`}
                     >
-                      <Server className="w-4 h-4" /> Local
+                      <Server className="h-4 w-4 shrink-0" />
+                      <span className="min-w-0"><span className="block text-white">Local</span><span className="mt-1 block break-words text-[10px] text-neutral-500">Run on this server</span></span>
                     </button>
                     <button
                       type="button"
                       onClick={() => { setDeploymentType('aws'); setStep('aws'); }}
-                      className={`flex-1 min-w-[100px] flex items-center justify-center gap-2 p-3 rounded-lg font-medium transition ${
+                      className={`flex min-h-16 min-w-0 items-center gap-2 border p-3 text-left text-xs font-medium transition ${
                         deploymentType === 'aws'
                           ? 'bg-orange-500/30 text-orange-300 border border-orange-500/50'
-                          : 'bg-secondary text-muted-foreground border border-border hover:border-border'
+                          : 'bg-[#111111] text-neutral-400 border-white/10 hover:border-white/25 hover:text-white'
                       }`}
                     >
-                      <Cloud className="w-4 h-4" /> AWS EC2
+                      <Cloud className="h-4 w-4 shrink-0" />
+                      <span className="min-w-0"><span className="block text-white">AWS EC2</span><span className="mt-1 block break-words text-[10px] text-neutral-500">Managed virtual machine</span></span>
                     </button>
                     <button
                       type="button"
                       onClick={() => { setDeploymentType('azure'); setStep('azure'); }}
-                      className={`flex-1 min-w-[100px] flex items-center justify-center gap-2 p-3 rounded-lg font-medium transition ${
+                      className={`flex min-h-16 min-w-0 items-center gap-2 border p-3 text-left text-xs font-medium transition ${
                         deploymentType === 'azure'
                           ? 'bg-blue-500/30 text-blue-300 border border-blue-500/50'
-                          : 'bg-secondary text-muted-foreground border border-border hover:border-border'
+                          : 'bg-[#111111] text-neutral-400 border-white/10 hover:border-white/25 hover:text-white'
                       }`}
                     >
-                      <Box className="w-4 h-4" /> Azure ACI
+                      <Box className="h-4 w-4 shrink-0" />
+                      <span className="min-w-0"><span className="block text-white">Azure ACI</span><span className="mt-1 block break-words text-[10px] text-neutral-500">Managed container instance</span></span>
                     </button>
                     <button
                       type="button"
                       onClick={() => { setDeploymentType('s3-static'); setStep('s3-folder'); }}
-                      className={`flex-1 min-w-[100px] flex items-center justify-center gap-2 p-3 rounded-lg font-medium transition ${
+                      className={`flex min-h-16 min-w-0 items-center gap-2 border p-3 text-left text-xs font-medium transition ${
                         deploymentType === 's3-static'
                           ? 'bg-success/10 text-success border border-success'
-                          : 'bg-secondary text-muted-foreground border border-border hover:border-border'
+                          : 'bg-[#111111] text-neutral-400 border-white/10 hover:border-white/25 hover:text-white'
                       }`}
                     >
-                      <Globe className="w-4 h-4" /> S3 Static
+                      <Globe className="h-4 w-4 shrink-0" />
+                      <span className="min-w-0"><span className="block text-white">S3 Static</span><span className="mt-1 block break-words text-[10px] text-neutral-500">Build and host frontend files</span></span>
                     </button>
                   </div>
-                  <p className="text-xs text-muted-foreground mb-4">
-                    <strong>Local:</strong> Runs on this server (localhost:4002+)<br/>
-                    <strong>AWS:</strong> Runs on EC2 with public IP<br/>
-                    <strong>Azure:</strong> Runs on Container Instances<br/>
-                    <strong>S3 Static:</strong> Build frontend and upload to S3 (no Docker)
-                  </p>
                 </>
               )}
 
@@ -550,16 +632,19 @@ export default function DeployProject() {
                     Injected into the container at runtime. The build engine auto-generates a Dockerfile
                     {hasDockerfile ? ' (your repository already has one)' : ' since your repository has none'}.
                   </p>
-                  <textarea
-                    value={envContent}
-                    onChange={(e) => setEnvContent(e.target.value)}
-                    placeholder="API_KEY=123..."
-                    aria-label="Environment variables"
-                    className="w-full h-24 bg-secondary border border-border rounded-lg p-2 text-xs font-mono mb-4 focus:border-primary outline-none"
-                  />
+                  <div data-setup-section="environment" className="scroll-mt-20">
+                    <textarea
+                      value={envContent}
+                      onChange={(e) => setEnvContent(e.target.value)}
+                      placeholder="API_KEY=123..."
+                      aria-label="Environment variables"
+                      className="w-full h-24 bg-secondary border border-border rounded-lg p-2 text-xs font-mono mb-4 focus:border-primary outline-none"
+                    />
+                  </div>
                   <button
                     type="button"
                     onClick={handleStartBuild}
+                    data-setup-section="review"
                     className="w-full bg-primary/10 text-primary py-2 rounded-lg font-medium hover:bg-primary/90 text-sm"
                   >
                     ▶️ Deploy to Local
@@ -588,7 +673,7 @@ export default function DeployProject() {
                       </select>
                     </div>
 
-                    <div>
+                    <div data-setup-section="environment" className="scroll-mt-20">
                       <label className="text-xs text-muted-foreground mb-1 block">Environment Variables (optional)</label>
                       <textarea
                         value={awsEnvironmentVars}
@@ -601,6 +686,7 @@ export default function DeployProject() {
                     <button
                       type="button"
                       onClick={handleStartBuild}
+                      data-setup-section="review"
                       className="w-full bg-orange-500/20 text-orange-300 py-2 rounded-lg font-medium hover:bg-orange-500/30 text-sm"
                     >
                       🚀 Deploy to AWS EC2
@@ -619,9 +705,14 @@ export default function DeployProject() {
                   repositoryUrl={repositoryUrl}
                   repositoryOwner={repositoryOwner || owner}
                   projectId={projectId}
+                  initialRoot={primaryRoot}
                   step={step as 's3-folder' | 's3-framework' | 's3-env'}
                   setStep={setStep}
-                  onDeploying={() => setStep('deploying')}
+                  onDeploying={() => {
+                    setDeploymentQueued(false);
+                    setStep('deploying');
+                  }}
+                  onDeploymentQueued={() => setDeploymentQueued(true)}
                   onDeploymentStarted={(deploymentId) => {
                     setActiveDeploymentId(deploymentId);
                   }}
@@ -636,7 +727,7 @@ export default function DeployProject() {
                   <p className="text-xs text-muted-foreground mb-4">Deploy your application to Azure Container Instances (ACI). Logs will stream in real-time below.</p>
                   
                   <div className="space-y-3">
-                    <div>
+                    <div data-setup-section="environment" className="scroll-mt-20">
                       <label className="text-xs text-muted-foreground mb-1 block">Application Name</label>
                       <input
                         type="text"
@@ -646,11 +737,23 @@ export default function DeployProject() {
                         className="w-full bg-secondary border border-border rounded-lg p-2 text-xs focus:border-blue-500/50 outline-none"
                       />
                       <p className="text-xs text-foreground/40 mt-1">Must be lowercase, alphanumeric and dashes only</p>
+                      <label className="mt-3 block text-xs text-muted-foreground" htmlFor="azure-environment-variables">
+                        Environment Variables (optional)
+                      </label>
+                      <textarea
+                        id="azure-environment-variables"
+                        value={azureEnvironmentVars}
+                        onChange={(e) => setAzureEnvironmentVars(e.target.value)}
+                        placeholder="NODE_ENV=production&#10;API_KEY=xxx"
+                        aria-label="Azure environment variables"
+                        className="mt-1 h-20 w-full border border-white/10 bg-[#111111] p-2 text-xs font-mono text-neutral-200 outline-none focus:border-blue-500/50"
+                      />
                     </div>
 
                     <button
                       type="button"
                       onClick={handleStartBuild}
+                      data-setup-section="review"
                       disabled={!azureAppName || !/^[a-z0-9-]+$/.test(azureAppName)}
                       className="w-full bg-blue-500/20 text-blue-300 py-2 rounded-lg font-medium hover:bg-blue-500/30 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                     >
@@ -661,10 +764,14 @@ export default function DeployProject() {
               )}
             </div>
           )}
-        </section>
+        </section>}
 
         {/* DEPLOYMENT ACTIVITY */}
-        <section className="flex min-h-[480px] min-w-0 flex-col overflow-hidden border border-white/10 bg-[#0A0A0A] lg:sticky lg:top-4 lg:h-[calc(100vh-14rem)] lg:min-h-[460px]">
+        <section data-setup-section="activity" className={`flex min-h-[480px] min-w-0 scroll-mt-20 flex-col overflow-hidden border border-white/10 bg-[#0A0A0A] ${
+          step === 'deploying'
+            ? 'lg:col-start-2 lg:h-[calc(100vh-11rem)] lg:min-h-[560px]'
+            : 'lg:sticky lg:top-4 lg:h-[calc(100vh-14rem)] lg:min-h-[460px]'
+        }`}>
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 bg-[#101010] px-4 py-3 sm:px-5">
               <div className="min-w-0">
                 <h2 className="text-sm font-semibold text-white">Deployment activity</h2>
@@ -713,6 +820,79 @@ export default function DeployProject() {
                 )}
               </div>
             </div>
+
+          {step === 'deploying' && (
+            <div className="border-b border-white/10 bg-[#0D0D0D] p-4 sm:p-5">
+              <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-400">Deployment process</p>
+                  <h2 className="mt-1 text-base font-semibold text-white">
+                    {deploymentQueued ? 'Resources are being provisioned' : 'Submitting deployment request'}
+                  </h2>
+                  <p className="mt-1 text-xs text-neutral-500">
+                    {deploymentQueued
+                      ? 'The deployment service accepted the request. Build output will stream below.'
+                      : 'Waiting for the deployment service to accept this request.'}
+                  </p>
+                </div>
+                <div className="border border-white/10 bg-[#101010] px-3 py-2 text-right">
+                  <div className="text-[9px] uppercase tracking-wider text-neutral-600">Target</div>
+                  <div className="mt-1 text-xs font-medium text-neutral-200">
+                    {deploymentType === 's3-static' ? 'S3 Static'
+                      : deploymentType === 'aws' ? 'AWS EC2'
+                        : deploymentType === 'azure' ? 'Azure ACI' : 'Local'}
+                  </div>
+                  {activeDeploymentId && (
+                    <div className="mt-1 max-w-48 truncate font-mono text-[10px] text-neutral-500" title={activeDeploymentId}>
+                      {activeDeploymentId}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <ol aria-label="Deployment stages" className="grid gap-2 sm:grid-cols-3">
+                {[
+                  {
+                    label: 'Configuration',
+                    detail: 'Deployment settings submitted',
+                    status: 'complete' as const,
+                  },
+                  {
+                    label: 'Request accepted',
+                    detail: deploymentQueued ? 'Deployment service accepted the request' : 'Waiting for service response',
+                    status: deploymentQueued ? 'complete' as const : 'active' as const,
+                  },
+                  {
+                    label: 'Build and provision',
+                    detail: deploymentQueued ? 'Running — follow live output below' : 'Starts after the request is accepted',
+                    status: deploymentQueued ? 'active' as const : 'pending' as const,
+                  },
+                ].map((stage, index) => (
+                  <li
+                    key={stage.label}
+                    className={`flex min-w-0 items-start gap-3 border p-3 ${
+                      stage.status === 'complete' ? 'border-emerald-400/20 bg-emerald-400/[0.04]'
+                        : stage.status === 'active' ? 'border-amber-300/25 bg-amber-300/[0.04]'
+                          : 'border-white/[0.07] bg-[#090909]'
+                    }`}
+                  >
+                    <span className={`flex h-6 w-6 shrink-0 items-center justify-center border text-[10px] font-semibold ${
+                      stage.status === 'complete' ? 'border-emerald-400/30 text-emerald-300'
+                        : stage.status === 'active' ? 'border-amber-300/30 text-amber-200'
+                          : 'border-white/10 text-neutral-600'
+                    }`}>
+                      {stage.status === 'complete' ? <CheckCircle2 className="h-3.5 w-3.5" /> : `0${index + 1}`}
+                    </span>
+                    <span className="min-w-0">
+                      <span className={`block text-xs font-medium ${
+                        stage.status === 'pending' ? 'text-neutral-500' : 'text-neutral-100'
+                      }`}>{stage.label}</span>
+                      <span className="mt-1 block text-[10px] leading-4 text-neutral-500">{stage.detail}</span>
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
           
           {/* The Terminal Screen */}
           <div className="flex-1 space-y-1 overflow-y-auto bg-[#070707] p-4 font-mono text-[11px] leading-relaxed sm:p-5 sm:text-xs">

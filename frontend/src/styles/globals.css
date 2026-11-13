@@ -9,6 +9,24 @@
 
 /* ========== BASE STYLES ========== */
 
+.dark-chart .recharts-cartesian-axis-tick-value,
+.dark-chart .recharts-pie-label-text,
+.dark-chart .recharts-label,
+.dark-chart .recharts-polar-angle-axis-tick-value,
+.dark-chart .recharts-polar-radius-axis-tick-value {
+  fill: #fff !important;
+  color: #fff !important;
+}
+
+.dark-chart .recharts-cartesian-axis-tick-line,
+.dark-chart .recharts-cartesian-axis-line {
+  stroke: #8a8a8a !important;
+}
+
+.dark-chart .recharts-legend-item-text {
+  color: #fff !important;
+}
+
 * {
   @apply m-0 p-0 box-border;
 }

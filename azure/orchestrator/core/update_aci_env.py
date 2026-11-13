@@ -42,8 +42,11 @@ def main():
     except Exception:
         new_env = {}
 
-    target_port = args.port or 80
-    new_env["PORT"] = str(target_port)
+    if "PORT" in new_env and str(new_env["PORT"]).isdigit():
+        target_port = int(new_env["PORT"])
+    else:
+        target_port = args.port or 80
+        new_env["PORT"] = str(target_port)
 
     # Format environment variables
     env_vars = [EnvironmentVariable(name=str(k), value=str(v)) for k, v in new_env.items() if v is not None]

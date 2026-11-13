@@ -33,7 +33,7 @@ class EnhancedLogger {
       };
 
       // Validate schema constraints
-      const validSources = ['system', 'git', 'framework', 'docker', 'aws', 'ecr', 'ecs', 'route53', 'azure', 'acr', 'aci', 'app'];
+      const validSources = ['system', 'git', 'framework', 'docker', 'aws', 'ecr', 'ecs', 'route53', 'azure', 'acr', 'aci', 'app', 'storage', 'kaniko'];
       const validLevels = ['debug', 'info', 'warn', 'error', 'success'];
 
       if (!validSources.includes(entry.source)) {

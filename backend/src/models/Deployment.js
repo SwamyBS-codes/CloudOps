@@ -235,7 +235,7 @@ const DeploymentSchema = new mongoose.Schema(
       timestamp: Date,
       source: {
         type: String,
-        enum: ['system', 'git', 'framework', 'docker', 'aws', 'ecr', 'ecs', 'route53', 'azure', 'acr', 'aci', 'app'],
+        enum: ['system', 'git', 'framework', 'docker', 'aws', 'ecr', 'ecs', 'route53', 'azure', 'acr', 'aci', 'app', 'storage', 'kaniko'],
       },
       level: {
         type: String,
@@ -268,7 +268,7 @@ const DeploymentSchema = new mongoose.Schema(
       timestamp: Date,
       source: {
         type: String,
-        enum: ['system', 'git', 'framework', 'docker', 'azure', 'acr', 'aci', 'app'],
+        enum: ['system', 'git', 'framework', 'docker', 'azure', 'acr', 'aci', 'app', 'storage', 'kaniko'],
       },
       level: {
         type: String,

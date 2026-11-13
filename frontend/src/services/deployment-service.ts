@@ -88,6 +88,7 @@ export const deploymentService = {
     repoUrl: string;
     appName: string;
     socketId?: string;
+    environmentVariables?: Record<string, string>;
   }) => {
     try {
       const response = await axiosClient.post('/api/azure/deploy', data);

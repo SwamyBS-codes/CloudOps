@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const mongoose = require('mongoose');
 const Project = require('../models/Project');
 const Deployment = require('../models/Deployment');
 const gitService = require('../services/gitService');
@@ -479,17 +480,35 @@ const getDeploymentServiceLogs = async (req, res) => {
     }
 };
 
+const findDeploymentByIdOrKey = (id) => {
+    if (!id) return Promise.resolve(null);
+    const strId = String(id);
+    const isObjectId = mongoose.Types.ObjectId.isValid(strId) && strId.length === 24;
+    return Deployment.findOne({
+        $or: [
+            isObjectId ? { _id: strId } : null,
+            { deploymentId: strId },
+        ].filter(Boolean),
+    });
+};
+
+const isAzureDeploymentRecord = (deployment) => {
+    if (!deployment) return false;
+    return (
+        deployment.deploymentService === 'azure' ||
+        deployment.provider === 'azure' ||
+        Boolean(deployment.infrastructure?.aci) ||
+        Boolean(deployment.infrastructure?.acr) ||
+        Boolean(deployment.publicUrl && deployment.publicUrl.includes('azurecontainer.io'))
+    );
+};
+
 const stopDeployment = async (req, res) => {
     try {
         const deploymentId = req.params.deploymentId || req.params.id;
-        const deployment = await Deployment.findOne({
-            $or: [
-                deploymentId.match(/^[0-9a-fA-F]{24}$/) ? { _id: deploymentId } : null,
-                { deploymentId },
-            ].filter(Boolean),
-        });
+        const deployment = await findDeploymentByIdOrKey(deploymentId);
 
-        if (deployment && (deployment.deploymentService === 'azure' || deployment.provider === 'azure')) {
+        if (deployment && isAzureDeploymentRecord(deployment)) {
             const result = await stopAzureDeployment(deployment._id, req.app.get('io'));
             return res.status(200).json(result);
         }
@@ -504,14 +523,9 @@ const stopDeployment = async (req, res) => {
 const startDeployment = async (req, res) => {
     try {
         const deploymentId = req.params.deploymentId || req.params.id;
-        const deployment = await Deployment.findOne({
-            $or: [
-                deploymentId.match(/^[0-9a-fA-F]{24}$/) ? { _id: deploymentId } : null,
-                { deploymentId },
-            ].filter(Boolean),
-        });
+        const deployment = await findDeploymentByIdOrKey(deploymentId);
 
-        if (deployment && (deployment.deploymentService === 'azure' || deployment.provider === 'azure')) {
+        if (deployment && isAzureDeploymentRecord(deployment)) {
             const result = await startAzureDeployment(deployment._id, req.app.get('io'));
             return res.status(200).json(result);
         }
@@ -528,8 +542,25 @@ const restartDeployment = startDeployment;
 const cancelDeployment = async (req, res) => {
     try {
         const deploymentId = req.params.deploymentId || req.params.id;
-        const result = await deploymentEngine.cancelQueuedDeployment(deploymentId, req.app.get('io'));
-        return res.status(200).json(result);
+        const deployment = await findDeploymentByIdOrKey(deploymentId);
+
+        if (deployment && isAzureDeploymentRecord(deployment)) {
+            const result = await cancelAzureDeployment(deployment._id, req.app.get('io'));
+            return res.status(200).json(result);
+        }
+
+        try {
+            const result = await deploymentEngine.cancelQueuedDeployment(deploymentId, req.app.get('io'));
+            return res.status(200).json(result);
+        } catch (_) {
+            if (deployment) {
+                deployment.status = 'cancelled';
+                deployment.phase = 'complete';
+                deployment.completedAt = new Date();
+                await deployment.save();
+            }
+            return res.status(200).json({ success: true, status: 'cancelled' });
+        }
     } catch (error) {
         return res.status(400).json({ success: false, error: error.message });
     }
@@ -540,18 +571,13 @@ const cancelQueuedDeployment = cancelDeployment;
 const terminateDeployment = async (req, res) => {
     try {
         const deploymentId = req.params.deploymentId || req.params.id;
-        const deployment = await Deployment.findOne({
-            $or: [
-                deploymentId.match(/^[0-9a-fA-F]{24}$/) ? { _id: deploymentId } : null,
-                { deploymentId },
-            ].filter(Boolean),
-        });
+        const deployment = await findDeploymentByIdOrKey(deploymentId);
 
         if (!deployment) {
             return res.status(404).json({ success: false, error: 'Deployment not found' });
         }
 
-        if (deployment.deploymentService === 'azure' || deployment.provider === 'azure') {
+        if (isAzureDeploymentRecord(deployment)) {
             const result = await deleteAzureDeployment(deployment._id, req.app.get('io'));
             return res.status(200).json(result);
         }
