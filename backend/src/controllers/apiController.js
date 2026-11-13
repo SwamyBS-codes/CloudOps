@@ -111,46 +111,17 @@ const getDeploymentById = async (req, res) => {
     }
 };
 
-const getDeploymentLogs = async (req, res) => {
-    try {
-        const logs = await deploymentEngine.getDeploymentLogs(req.params.id, {
-            source: req.query.source || null,
-            level: req.query.level || null,
-            limit: Number(req.query.limit || 100),
-            skip: Number(req.query.skip || 0),
-        });
-
-        return res.status(200).json({
-            success: true,
-            logs,
-        });
-    } catch (error) {
-        return res.status(404).json({
-            success: false,
-            error: error.message || 'Deployment logs not found',
-        });
-    }
-};
-
-const getDeploymentStatus = async (req, res) => {
-    try {
-        const deployment = await deploymentEngine.getDeploymentDetails(req.params.id);
-
-        return res.status(200).json({
-            success: true,
-            deployment,
-        });
-    } catch (error) {
-        return res.status(404).json({
-            success: false,
-            error: error.message || 'Deployment status not found',
-        });
-    }
-};
+const getDeploymentLogs = (req, res) => deploymentController.getDeploymentLogs(req, res);
+const getDeploymentStatus = (req, res) => deploymentController.getDeploymentStatus(req, res);
 
 const cancelDeployment = (req, res) => deploymentController.cancelDeployment(req, res);
 const stopDeployment = (req, res) => deploymentController.stopDeployment(req, res);
 const startDeployment = (req, res) => deploymentController.startDeployment(req, res);
+const restartDeployment = (req, res) => deploymentController.restartDeployment(req, res);
+const getDeploymentEnvVariables = (req, res) => deploymentController.getDeploymentEnvVariables(req, res);
+const updateDeploymentEnvVariables = (req, res) => deploymentController.updateDeploymentEnvVariables(req, res);
+const deleteDeploymentEnvVariable = (req, res) => deploymentController.deleteDeploymentEnvVariable(req, res);
+const getAppRuntimeLogs = (req, res) => deploymentController.getAppRuntimeLogs(req, res);
 const deleteDeployment = (req, res) => deploymentController.terminateDeployment(req, res);
 
 const getAnalyticsDashboard = async (req, res) => {
@@ -476,10 +447,15 @@ module.exports = {
     createDeployment,
     getDeploymentById,
     getDeploymentLogs,
+    getAppRuntimeLogs,
     getDeploymentStatus,
     cancelDeployment,
     stopDeployment,
     startDeployment,
+    restartDeployment,
+    getDeploymentEnvVariables,
+    updateDeploymentEnvVariables,
+    deleteDeploymentEnvVariable,
     deleteDeployment,
     getAnalyticsDashboard,
     getAnalyticsDeployments,

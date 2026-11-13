@@ -18,6 +18,7 @@ import {
   Search,
   Server,
   Layers3,
+  Sliders,
   Trash2,
   X,
   Cloud,
@@ -634,6 +635,20 @@ export default function DeploymentsPage() {
                         Cancel
                       </button>
                     )}
+
+                    {/* Env Variables Button */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(`/deployments/${deployment._id}#deployment-env`);
+                      }}
+                      className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-[#161616] px-2.5 py-1 text-xs font-medium text-neutral-300 transition hover:bg-white/[0.08] hover:text-white"
+                      title="Manage Environment Variables"
+                    >
+                      <Sliders className="h-3 w-3 text-emerald-400" />
+                      Env
+                    </button>
 
                     {/* Terminate button for deployed, stopped, or failed */}
                     {['success', 'running', 'stopped', 'failed'].includes(status) && (

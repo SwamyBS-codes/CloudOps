@@ -13,6 +13,7 @@ const {
   StopInstancesCommand,
   TerminateInstancesCommand,
   DescribeInstanceStatusCommand,
+  GetConsoleOutputCommand,
   DescribeSecurityGroupsCommand,
   CreateKeyPairCommand,
   DescribeKeyPairsCommand,
@@ -481,6 +482,26 @@ class EC2Service {
       };
     } catch (error) {
       throw new Error(`Failed to get instance status for ${instanceId}: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get instance system/application console output
+   * @param {string} instanceId
+   * @returns {Promise<string>}
+   */
+  async getConsoleOutput(instanceId) {
+    try {
+      const command = new GetConsoleOutputCommand({
+        InstanceId: instanceId,
+      });
+      const response = await ec2Client.send(command);
+      if (response.Output) {
+        return Buffer.from(response.Output, 'base64').toString('utf8');
+      }
+      return '';
+    } catch (error) {
+      return `[AWS EC2 Log Notice] Console output not available: ${error.message}`;
     }
   }
 

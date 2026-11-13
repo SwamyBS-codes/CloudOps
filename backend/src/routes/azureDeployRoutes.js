@@ -6,9 +6,15 @@ const deploymentController = require('../controllers/deploymentController');
 const router = express.Router();
 
 // Lifecycle routes for Azure deployments
+router.get('/deployments/:id/status', deploymentController.getDeploymentStatus);
+router.get('/deployments/:id/logs', deploymentController.getDeploymentLogs);
+router.get('/deployments/:id/app-logs', deploymentController.getAppRuntimeLogs);
 router.post('/deployments/:id/cancel', deploymentController.cancelDeployment);
 router.post('/deployments/:id/stop', deploymentController.stopDeployment);
 router.post('/deployments/:id/start', deploymentController.startDeployment);
+router.get('/deployments/:id/env', deploymentController.getDeploymentEnvVariables);
+router.post('/deployments/:id/env', deploymentController.updateDeploymentEnvVariables);
+router.delete('/deployments/:id/env/:key', deploymentController.deleteDeploymentEnvVariable);
 router.delete('/deployments/:id', deploymentController.terminateDeployment);
 
 // POST /api/azure/deploy
@@ -17,6 +23,7 @@ router.post('/deploy', (req, res) => {
   const {
     repoUrl,
     appName,
+    branch = 'main',
     socketId,
     environmentVariables,
     applicationType,
@@ -46,6 +53,7 @@ router.post('/deploy', (req, res) => {
   runAzureDeployment({
     repoUrl,
     appName,
+    branch,
     socketId,
     io,
     userId,

@@ -6,16 +6,25 @@ import {
   AlertTriangle,
   ArrowLeft,
   Ban,
+  Check,
   ChevronDown,
   Clock3,
+  Copy,
   ExternalLink,
+  Eye,
+  EyeOff,
+  FileText,
   GitBranch,
   Globe2,
   HardDriveDownload,
   Loader2,
+  Lock,
   Pause,
   Play,
+  Plus,
   Power,
+  RefreshCw,
+  Sliders,
   Trash2,
   X,
 } from 'lucide-react';
@@ -136,6 +145,28 @@ type DeploymentDetails = {
     phase?: string;
   };
   metadata?: Record<string, any>;
+  environmentVariables?: Array<{ key: string; value: string; encrypted?: boolean }> | Record<string, string>;
+};
+
+const normalizeEnv = (raw: any): Array<{ key: string; value: string; encrypted?: boolean }> => {
+  if (!raw) return [];
+  if (Array.isArray(raw)) {
+    return raw
+      .map((item) => ({
+        key: String(item?.key || ''),
+        value: String(item?.value ?? ''),
+        encrypted: Boolean(item?.encrypted),
+      }))
+      .filter((item) => Boolean(item.key));
+  }
+  if (typeof raw === 'object') {
+    return Object.entries(raw).map(([key, value]) => ({
+      key,
+      value: String(value ?? ''),
+      encrypted: false,
+    }));
+  }
+  return [];
 };
 
 const DOCKER_STEPS = [
@@ -220,6 +251,188 @@ export default function DeploymentDetailPage() {
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [showMetadata, setShowMetadata] = useState(false);
 
+  // Environment variables state
+  const [envVars, setEnvVars] = useState<Array<{ key: string; value: string; encrypted?: boolean }>>([]);
+  const [revealedEnvKeys, setRevealedEnvKeys] = useState<Record<string, boolean>>({});
+  const [copiedEnvKey, setCopiedEnvKey] = useState<string | null>(null);
+  const [envModalOpen, setEnvModalOpen] = useState(false);
+  const [bulkEnvModalOpen, setBulkEnvModalOpen] = useState(false);
+  const [editEnvVar, setEditEnvVar] = useState<{ key: string; value: string; encrypted?: boolean } | null>(null);
+  const [deleteConfirmKey, setDeleteConfirmKey] = useState<string | null>(null);
+  const [envKeyInput, setEnvKeyInput] = useState('');
+  const [envValInput, setEnvValInput] = useState('');
+  const [envEncryptedInput, setEnvEncryptedInput] = useState(false);
+  const [bulkEnvText, setBulkEnvText] = useState('');
+  const [envSaving, setEnvSaving] = useState(false);
+  const [envSuccess, setEnvSuccess] = useState<string | null>(null);
+  const [envError, setEnvError] = useState<string | null>(null);
+
+  // App runtime logs state
+  const [logViewTab, setLogViewTab] = useState<'build' | 'app'>('build');
+  const [appLogs, setAppLogs] = useState<string>('');
+  const [appLogsMeta, setAppLogsMeta] = useState<{
+    source?: string;
+    containerName?: string;
+    state?: string;
+    detailStatus?: string;
+    previousState?: string;
+  } | null>(null);
+  const [appLogsLoading, setAppLogsLoading] = useState(false);
+
+  const fetchAppLogs = async () => {
+    if (!id) return;
+    setAppLogsLoading(true);
+    try {
+      const res = await deploymentService.getAppLogs(id);
+      const data = res.data as any;
+      setAppLogs(data.logs || '');
+      setAppLogsMeta({
+        source: data.source,
+        containerName: data.containerName,
+        state: data.state,
+        detailStatus: data.detailStatus,
+        previousState: data.previousState,
+      });
+    } catch (err: any) {
+      console.error('Failed to fetch app logs:', err);
+    } finally {
+      setAppLogsLoading(false);
+    }
+  };
+
+  const handleSaveEnvVar = async () => {
+    if (!id || !envKeyInput.trim()) return;
+    setEnvSaving(true);
+    setEnvError(null);
+    setEnvSuccess(null);
+
+    const k = envKeyInput.trim().toUpperCase();
+    const v = envValInput;
+    const enc = envEncryptedInput;
+
+    try {
+      const res = await deploymentService.updateEnvVariables(id, {
+        key: k,
+        value: v,
+        encrypted: enc,
+      });
+
+      const resData = res.data as any;
+      const updated = resData?.environmentVariables || [];
+      setEnvVars(normalizeEnv(updated));
+      setEnvModalOpen(false);
+      setEditEnvVar(null);
+      setEnvKeyInput('');
+      setEnvValInput('');
+      setEnvEncryptedInput(false);
+
+      const aciSynced = Boolean(resData?.aciSynced);
+      setEnvSuccess(
+        aciSynced
+          ? `Updated "${k}" and synced to live container! Streaming restart logs below.`
+          : `Updated "${k}" successfully.`
+      );
+
+      if (aciSynced) {
+        setTimeout(() => {
+          document.getElementById('deployment-logs')?.scrollIntoView({ behavior: 'smooth' });
+        }, 500);
+      }
+    } catch (err: any) {
+      setEnvError(err?.response?.data?.error || err?.message || 'Failed to update environment variable.');
+    } finally {
+      setEnvSaving(false);
+    }
+  };
+
+  const handleDeleteEnvVar = async (targetKey: string) => {
+    if (!id || !targetKey) return;
+    setEnvSaving(true);
+    setEnvError(null);
+    setEnvSuccess(null);
+
+    try {
+      const res = await deploymentService.deleteEnvVariable(id, targetKey);
+      const resData = res.data as any;
+      const updated = resData?.environmentVariables || [];
+      setEnvVars(normalizeEnv(updated));
+      setDeleteConfirmKey(null);
+
+      const aciSynced = Boolean(resData?.aciSynced);
+      setEnvSuccess(
+        aciSynced
+          ? `Deleted "${targetKey}" and updated live container! Streaming restart logs below.`
+          : `Deleted "${targetKey}" successfully.`
+      );
+
+      if (aciSynced) {
+        setTimeout(() => {
+          document.getElementById('deployment-logs')?.scrollIntoView({ behavior: 'smooth' });
+        }, 500);
+      }
+    } catch (err: any) {
+      setEnvError(err?.response?.data?.error || err?.message || 'Failed to delete environment variable.');
+    } finally {
+      setEnvSaving(false);
+    }
+  };
+
+  const handleBulkEnvSave = async () => {
+    if (!id || !bulkEnvText.trim()) return;
+    setEnvSaving(true);
+    setEnvError(null);
+    setEnvSuccess(null);
+
+    try {
+      const parsed: Record<string, string> = {};
+      const lines = bulkEnvText.split('\n');
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith('#')) continue;
+        const eqIdx = trimmed.indexOf('=');
+        if (eqIdx > 0) {
+          const k = trimmed.slice(0, eqIdx).trim().toUpperCase();
+          let v = trimmed.slice(eqIdx + 1).trim();
+          if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
+            v = v.slice(1, -1);
+          }
+          if (k) parsed[k] = v;
+        }
+      }
+
+      if (Object.keys(parsed).length === 0) {
+        throw new Error('No valid KEY=VALUE lines found to import.');
+      }
+
+      const res = await deploymentService.updateEnvVariables(id, {
+        environmentVariables: parsed,
+      });
+
+      const resData = res.data as any;
+      const updated = resData?.environmentVariables || [];
+      setEnvVars(normalizeEnv(updated));
+      setBulkEnvModalOpen(false);
+      setBulkEnvText('');
+
+      const aciSynced = Boolean(resData?.aciSynced);
+      setEnvSuccess(
+        aciSynced
+          ? `Imported ${Object.keys(parsed).length} variables and synced to container! Streaming restart logs below.`
+          : `Imported ${Object.keys(parsed).length} variables successfully.`
+      );
+
+      if (aciSynced) {
+        setTimeout(() => {
+          document.getElementById('deployment-logs')?.scrollIntoView({ behavior: 'smooth' });
+        }, 500);
+      }
+    } catch (err: any) {
+      setEnvError(err?.response?.data?.error || err?.message || 'Failed to import environment variables.');
+    } finally {
+      setEnvSaving(false);
+    }
+  };
+
   const deploymentKey = deployment?._id || deployment?.deploymentId || '';
   const metadata = (deployment?.metadata || {}) as Record<string, any>;
   const infrastructure = (deployment?.infrastructure || metadata.infrastructure || {}) as NonNullable<DeploymentDetails['infrastructure']> & Record<string, any>;
@@ -298,6 +511,9 @@ export default function DeploymentDetailPage() {
         const nextLogs = Array.isArray(logsPayload?.logs) ? logsPayload.logs : [];
 
         setDeployment(nextDeployment);
+        if (nextDeployment?.environmentVariables) {
+          setEnvVars(normalizeEnv(nextDeployment.environmentVariables));
+        }
         setLogs([...nextLogs].sort((a: DeploymentLog, b: DeploymentLog) => {
           const aTime = a?.timestamp ? new Date(a.timestamp).getTime() : 0;
           const bTime = b?.timestamp ? new Date(b.timestamp).getTime() : 0;
@@ -421,6 +637,14 @@ export default function DeploymentDetailPage() {
       return `${ts ? `[${ts}] ` : ''}${source}${level}${log.message || ''}`.trim();
     });
   }, [logs]);
+
+  const renderedAppLogs = useMemo(() => {
+    if (!appLogs || !appLogs.trim()) return [];
+    return appLogs
+      .split('\n')
+      .map((line) => line.trimEnd())
+      .filter((line) => line.length > 0);
+  }, [appLogs]);
 
   const status = deployment?.status || 'pending';
   const liveUrl = ['stopped', 'closed'].includes(status)
@@ -596,6 +820,7 @@ export default function DeploymentDetailPage() {
                 { label: 'Overview', id: 'deployment-overview' },
                 { label: 'Progress', id: 'deployment-progress' },
                 { label: 'Logs', id: 'deployment-logs' },
+                { label: 'Environment', id: 'deployment-env' },
                 { label: 'Source & build', id: 'deployment-source', metadata: true },
                 { label: 'Infrastructure', id: 'deployment-infrastructure', metadata: true },
               ].map((item) => (
@@ -787,31 +1012,287 @@ export default function DeploymentDetailPage() {
                 </div>
 
                 <div id="deployment-logs" className="min-w-0 scroll-mt-20 border border-white/10 bg-[#0C0C0C] p-4 sm:p-5">
-                  <div className="flex items-center justify-between gap-3">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-white/[0.07] pb-3">
                     <div>
-                      <h2 className="text-sm font-semibold text-white">Build logs</h2>
-                      <p className="mt-1 text-[11px] text-neutral-500">Live output from this deployment</p>
-                    </div>
-                    <span className="font-mono text-[10px] uppercase tracking-wider text-neutral-600">
-                      {logs.length} {logs.length === 1 ? 'entry' : 'entries'}
-                    </span>
-                  </div>
-                  <div className="mt-3">
-                    {loading ? (
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Loading logs...
+                      <div className="flex items-center gap-2">
+                        <FileText className="h-4 w-4 text-emerald-400" />
+                        <h2 className="text-sm font-semibold text-white">Deployment Logs</h2>
                       </div>
-                    ) : renderedLogs.length > 0 ? (
-                      <TerminalStream logs={renderedLogs} />
+                      <p className="mt-0.5 text-[11px] text-neutral-500">
+                        {logViewTab === 'build' ? 'Build pipeline output' : 'Live container application output (stdout/stderr)'}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1 border border-white/10 bg-[#141414] p-0.5">
+                        <button
+                          type="button"
+                          onClick={() => setLogViewTab('build')}
+                          className={`px-2.5 py-1 text-xs font-medium transition ${
+                            logViewTab === 'build'
+                              ? 'bg-white text-black font-semibold shadow-sm'
+                              : 'text-neutral-400 hover:text-white'
+                          }`}
+                        >
+                          Build logs ({logs.length})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setLogViewTab('app');
+                            fetchAppLogs();
+                          }}
+                          className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium transition ${
+                            logViewTab === 'app'
+                              ? 'bg-emerald-500 text-black font-semibold shadow-sm'
+                              : 'text-neutral-400 hover:text-white'
+                          }`}
+                        >
+                          <span className="relative flex h-2 w-2">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                          </span>
+                          App runtime logs
+                        </button>
+                      </div>
+
+                      {logViewTab === 'app' && (
+                        <button
+                          type="button"
+                          onClick={fetchAppLogs}
+                          disabled={appLogsLoading}
+                          className="flex items-center gap-1.5 border border-white/10 bg-white/5 px-2.5 py-1 text-xs text-neutral-300 hover:bg-white/10 hover:text-white transition disabled:opacity-50"
+                        >
+                          <RefreshCw className={`h-3 w-3 ${appLogsLoading ? 'animate-spin' : ''}`} />
+                          Refresh
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="mt-3">
+                    {logViewTab === 'build' ? (
+                      loading ? (
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground py-6">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Loading build logs...
+                        </div>
+                      ) : renderedLogs.length > 0 ? (
+                        <TerminalStream logs={renderedLogs} />
+                      ) : (
+                        <div className="border border-white/10 bg-[#101010] px-4 py-3 text-sm text-neutral-500">
+                          {deployment.status === 'building' || deployment.status === 'deploying'
+                            ? 'Waiting for deployment logs...'
+                            : deployment.error?.message || 'No build logs recorded for this deployment.'}
+                        </div>
+                      )
                     ) : (
-                      <div className="border border-white/10 bg-[#101010] px-4 py-3 text-sm text-neutral-500">
-                        {deployment.status === 'building' || deployment.status === 'deploying'
-                          ? 'Waiting for deployment logs...'
-                          : deployment.error?.message || 'No logs recorded for this deployment.'}
+                      <div>
+                        {appLogsMeta?.detailStatus && appLogsMeta.detailStatus.toLowerCase().includes('crash') && (
+                          <div className="mb-3 border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-300 flex items-start gap-2.5">
+                            <AlertTriangle className="h-4 w-4 text-rose-400 shrink-0 mt-0.5" />
+                            <div>
+                              <div className="font-semibold text-rose-200">
+                                Container Health Issue: {appLogsMeta.detailStatus}
+                              </div>
+                              <div className="text-rose-300/80 mt-0.5 text-[11px] font-mono">
+                                Container: {appLogsMeta.containerName || 'task'} • State: {appLogsMeta.state || 'Waiting'}
+                                {appLogsMeta.previousState ? ` • ${appLogsMeta.previousState}` : ''}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {appLogsLoading ? (
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground py-6">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Fetching container application logs from cloud...
+                          </div>
+                        ) : renderedAppLogs.length > 0 ? (
+                          <TerminalStream logs={renderedAppLogs} />
+                        ) : (
+                          <div className="border border-white/10 bg-[#101010] p-4 text-xs font-mono text-neutral-400">
+                            <div className="flex items-center gap-2 text-neutral-200 font-medium">
+                              <span>Container: {appLogsMeta?.containerName || 'task'}</span>
+                              <span className="text-[10px] border border-white/10 px-1.5 py-0.5 text-neutral-400">
+                                {appLogsMeta?.state || deployment.status}
+                              </span>
+                            </div>
+                            <p className="text-neutral-500 mt-2">
+                              No stdout/stderr captured yet for this container. Click &quot;Refresh&quot; to poll latest runtime output.
+                            </p>
+                            {appLogsMeta?.previousState && (
+                              <p className="text-amber-400/90 mt-2">
+                                Diagnostic Info: {appLogsMeta.previousState}
+                              </p>
+                            )}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
+                </div>
+
+                {/* Environment Variables Management Section */}
+                <div id="deployment-env" className="min-w-0 scroll-mt-20 border border-white/10 bg-[#0C0C0C] p-4 sm:p-5">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-white/[0.07] pb-4">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <Sliders className="h-4 w-4 text-emerald-400" />
+                        <h2 className="text-sm font-semibold text-white">Environment Variables</h2>
+                        <span className="border border-white/10 bg-[#141414] px-2 py-0.5 text-[10px] font-mono text-neutral-400">
+                          {envVars.length}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-[11px] text-neutral-500">
+                        Manage runtime configurations. Updates will automatically sync and restart the container with real-time logs.
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEnvKeyInput('');
+                          setEnvValInput('');
+                          setEnvEncryptedInput(false);
+                          setEditEnvVar(null);
+                          setEnvModalOpen(true);
+                        }}
+                        className="inline-flex items-center gap-1.5 border border-emerald-400/40 bg-emerald-400/10 px-3 py-1.5 text-xs font-medium text-emerald-300 transition hover:bg-emerald-400/20"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        Add Variable
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setBulkEnvText('');
+                          setBulkEnvModalOpen(true);
+                        }}
+                        className="inline-flex items-center gap-1.5 border border-white/10 bg-[#141414] px-3 py-1.5 text-xs font-medium text-neutral-300 transition hover:bg-white/[0.08]"
+                        title="Import or paste variables from .env"
+                      >
+                        <FileText className="h-3.5 w-3.5" />
+                        Bulk Import (.env)
+                      </button>
+                    </div>
+                  </div>
+
+                  {envSuccess && (
+                    <div className="mt-3 flex items-center gap-2 border border-emerald-400/30 bg-emerald-400/[0.05] px-3.5 py-2.5 text-xs text-emerald-300">
+                      <Check className="h-3.5 w-3.5 shrink-0" />
+                      <span>{envSuccess}</span>
+                    </div>
+                  )}
+
+                  {envError && (
+                    <div className="mt-3 flex items-center gap-2 border border-destructive/40 bg-destructive/10 px-3.5 py-2.5 text-xs text-destructive">
+                      <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                      <span>{envError}</span>
+                    </div>
+                  )}
+
+                  {envVars.length === 0 ? (
+                    <div className="py-8 text-center text-xs text-neutral-500">
+                      No environment variables configured for this deployment yet. Click "Add Variable" or "Bulk Import (.env)" to configure one.
+                    </div>
+                  ) : (
+                    <div className="mt-3 divide-y divide-white/[0.05] overflow-x-auto">
+                      <table className="w-full text-left text-xs">
+                        <thead>
+                          <tr className="border-b border-white/[0.08] text-[10px] uppercase tracking-wider text-neutral-500">
+                            <th className="py-2.5 pr-4 font-medium">Variable Key</th>
+                            <th className="py-2.5 px-4 font-medium">Value</th>
+                            <th className="py-2.5 pl-4 text-right font-medium">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/[0.04]">
+                          {envVars.map((item) => {
+                            const isRevealed = revealedEnvKeys[item.key] || false;
+                            const isCopied = copiedEnvKey === item.key;
+
+                            return (
+                              <tr key={item.key} className="group hover:bg-white/[0.02]">
+                                <td className="py-3 pr-4 font-mono font-medium text-neutral-200">
+                                  <div className="flex items-center gap-2">
+                                    <span>{item.key}</span>
+                                    {item.encrypted && (
+                                      <span className="inline-flex items-center gap-1 border border-white/10 bg-[#161616] px-1.5 py-0.5 text-[9px] text-neutral-400">
+                                        <Lock className="h-2.5 w-2.5" />
+                                        secret
+                                      </span>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="py-3 px-4 font-mono text-neutral-400 max-w-md truncate">
+                                  {item.encrypted && !isRevealed ? (
+                                    <span className="tracking-widest text-neutral-600">••••••••••••</span>
+                                  ) : (
+                                    <span>{item.value || <span className="text-neutral-600 italic">empty</span>}</span>
+                                  )}
+                                </td>
+                                <td className="py-3 pl-4 text-right">
+                                  <div className="inline-flex items-center justify-end gap-1">
+                                    {item.encrypted && (
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setRevealedEnvKeys((prev) => ({ ...prev, [item.key]: !prev[item.key] }))
+                                        }
+                                        className="border border-white/10 bg-[#141414] p-1.5 text-neutral-400 transition hover:bg-white/[0.08] hover:text-white"
+                                        title={isRevealed ? 'Hide secret' : 'Reveal secret'}
+                                      >
+                                        {isRevealed ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                                      </button>
+                                    )}
+
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        navigator.clipboard?.writeText(item.value);
+                                        setCopiedEnvKey(item.key);
+                                        setTimeout(() => setCopiedEnvKey(null), 2000);
+                                      }}
+                                      className="border border-white/10 bg-[#141414] p-1.5 text-neutral-400 transition hover:bg-white/[0.08] hover:text-white"
+                                      title="Copy value"
+                                    >
+                                      {isCopied ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setEditEnvVar(item);
+                                        setEnvKeyInput(item.key);
+                                        setEnvValInput(item.value);
+                                        setEnvEncryptedInput(Boolean(item.encrypted));
+                                        setEnvModalOpen(true);
+                                      }}
+                                      className="border border-white/10 bg-[#141414] px-2 py-1 text-[11px] text-neutral-300 transition hover:bg-white/[0.08] hover:text-white"
+                                    >
+                                      Edit
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      disabled={envSaving}
+                                      onClick={() => setDeleteConfirmKey(item.key)}
+                                      className="border border-destructive/20 bg-destructive/10 p-1.5 text-destructive transition hover:bg-destructive/20"
+                                      title="Delete variable"
+                                    >
+                                      <Trash2 className="h-3 w-3" />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1198,6 +1679,195 @@ export default function DeploymentDetailPage() {
                 >
                   {bringingDown && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                   Confirm Termination
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Add / Edit Variable Modal */}
+        {envModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div
+              className="absolute inset-0 bg-black/75 backdrop-blur-sm"
+              onClick={() => !envSaving && setEnvModalOpen(false)}
+            />
+            <div className="relative z-10 w-full max-w-md rounded-2xl border border-white/10 bg-[#0E0E0E] p-6 shadow-2xl">
+              <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                <h3 className="text-base font-semibold text-white">
+                  {editEnvVar ? 'Edit Environment Variable' : 'Add Environment Variable'}
+                </h3>
+                <button
+                  type="button"
+                  disabled={envSaving}
+                  onClick={() => setEnvModalOpen(false)}
+                  className="text-neutral-400 hover:text-white"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="mt-4 space-y-4">
+                <div>
+                  <label className="text-xs font-medium uppercase tracking-wider text-neutral-400">
+                    Variable Key
+                  </label>
+                  <input
+                    type="text"
+                    disabled={Boolean(editEnvVar) || envSaving}
+                    value={envKeyInput}
+                    onChange={(e) => setEnvKeyInput(e.target.value)}
+                    placeholder="e.g. MONGO_URI, PORT, JWT_SECRET"
+                    className="mt-1.5 w-full rounded-xl border border-white/10 bg-[#141414] px-3.5 py-2.5 font-mono text-xs text-white placeholder:text-neutral-600 focus:border-emerald-400 focus:outline-none disabled:opacity-50"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-medium uppercase tracking-wider text-neutral-400">
+                    Variable Value
+                  </label>
+                  <textarea
+                    rows={3}
+                    disabled={envSaving}
+                    value={envValInput}
+                    onChange={(e) => setEnvValInput(e.target.value)}
+                    placeholder="Enter value..."
+                    className="mt-1.5 w-full rounded-xl border border-white/10 bg-[#141414] px-3.5 py-2.5 font-mono text-xs text-white placeholder:text-neutral-600 focus:border-emerald-400 focus:outline-none"
+                  />
+                </div>
+
+                <label className="flex items-center gap-2 text-xs text-neutral-300 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={envEncryptedInput}
+                    onChange={(e) => setEnvEncryptedInput(e.target.checked)}
+                    className="rounded border-white/20 bg-[#141414] text-emerald-400 focus:ring-0"
+                  />
+                  <span>Mask / secret value (hidden in view by default)</span>
+                </label>
+              </div>
+
+              <div className="mt-6 flex justify-end gap-3 border-t border-white/10 pt-4">
+                <button
+                  type="button"
+                  disabled={envSaving}
+                  onClick={() => setEnvModalOpen(false)}
+                  className="border border-white/10 bg-[#161616] px-4 py-2 text-xs font-medium text-neutral-300 hover:text-white"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={envSaving || !envKeyInput.trim()}
+                  onClick={() => void handleSaveEnvVar()}
+                  className="inline-flex items-center gap-1.5 border border-emerald-400/50 bg-emerald-500 px-4 py-2 text-xs font-medium text-black hover:bg-emerald-400 disabled:opacity-50"
+                >
+                  {envSaving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  Save & Apply to Container
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Bulk Import Modal */}
+        {bulkEnvModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div
+              className="absolute inset-0 bg-black/75 backdrop-blur-sm"
+              onClick={() => !envSaving && setBulkEnvModalOpen(false)}
+            />
+            <div className="relative z-10 w-full max-w-lg rounded-2xl border border-white/10 bg-[#0E0E0E] p-6 shadow-2xl">
+              <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                <h3 className="text-base font-semibold text-white">Bulk Import Environment Variables</h3>
+                <button
+                  type="button"
+                  disabled={envSaving}
+                  onClick={() => setBulkEnvModalOpen(false)}
+                  className="text-neutral-400 hover:text-white"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="mt-4 space-y-2">
+                <p className="text-xs text-neutral-400 leading-relaxed">
+                  Paste variables in standard <span className="font-mono text-emerald-400">KEY=VALUE</span> format. Existing keys will be updated and new keys added.
+                </p>
+                <textarea
+                  rows={8}
+                  disabled={envSaving}
+                  value={bulkEnvText}
+                  onChange={(e) => setBulkEnvText(e.target.value)}
+                  placeholder={`PORT=3000\nNODE_ENV=production\nMONGO_URI=mongodb+srv://user:pass@cluster.mongodb.net/dbname`}
+                  className="w-full rounded-xl border border-white/10 bg-[#141414] p-3.5 font-mono text-xs text-white placeholder:text-neutral-600 focus:border-emerald-400 focus:outline-none"
+                />
+              </div>
+
+              <div className="mt-6 flex justify-end gap-3 border-t border-white/10 pt-4">
+                <button
+                  type="button"
+                  disabled={envSaving}
+                  onClick={() => setBulkEnvModalOpen(false)}
+                  className="border border-white/10 bg-[#161616] px-4 py-2 text-xs font-medium text-neutral-300 hover:text-white"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={envSaving || !bulkEnvText.trim()}
+                  onClick={() => void handleBulkEnvSave()}
+                  className="inline-flex items-center gap-1.5 border border-emerald-400/50 bg-emerald-500 px-4 py-2 text-xs font-medium text-black hover:bg-emerald-400 disabled:opacity-50"
+                >
+                  {envSaving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  Import & Apply to Container
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Delete Variable Confirmation Modal */}
+        {deleteConfirmKey && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div
+              className="absolute inset-0 bg-black/75 backdrop-blur-sm"
+              onClick={() => !envSaving && setDeleteConfirmKey(null)}
+            />
+            <div className="relative z-10 w-full max-w-sm rounded-2xl border border-white/10 bg-[#0E0E0E] p-6 shadow-2xl">
+              <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                <h3 className="text-base font-semibold text-white">Delete Variable</h3>
+                <button
+                  type="button"
+                  disabled={envSaving}
+                  onClick={() => setDeleteConfirmKey(null)}
+                  className="text-neutral-400 hover:text-white"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <p className="mt-4 text-xs text-neutral-300 leading-relaxed">
+                Are you sure you want to delete <span className="font-mono text-emerald-400">{deleteConfirmKey}</span>? The container will restart to apply this change.
+              </p>
+
+              <div className="mt-6 flex justify-end gap-3 border-t border-white/10 pt-4">
+                <button
+                  type="button"
+                  disabled={envSaving}
+                  onClick={() => setDeleteConfirmKey(null)}
+                  className="border border-white/10 bg-[#161616] px-4 py-2 text-xs font-medium text-neutral-300 hover:text-white"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={envSaving}
+                  onClick={() => void handleDeleteEnvVar(deleteConfirmKey)}
+                  className="inline-flex items-center gap-1.5 border border-destructive/50 bg-destructive px-4 py-2 text-xs font-medium text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50"
+                >
+                  {envSaving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  Confirm Delete
                 </button>
               </div>
             </div>

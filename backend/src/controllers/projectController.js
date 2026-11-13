@@ -3,6 +3,7 @@ const path = require('path');
 const { spawn } = require('child_process');
 const Project = require('../models/Project');
 const Deployment = require('../models/Deployment');
+const { pushDeploymentLog } = require('../utils/deploymentPersistence');
 
 // Extract user id from req (either authMiddleware or direct header)
 function getUserIdFromReq(req) {
@@ -20,7 +21,7 @@ function getUserIdFromReq(req) {
 }
 
 // Helper to execute Python ACI update
-function triggerAciUpdate({ subscriptionId, resourceGroup, groupName, envMap, port }) {
+function triggerAciUpdate({ subscriptionId, resourceGroup, groupName, envMap, port, io, deploymentId }) {
   return new Promise((resolve, reject) => {
     const orchestratorCwd = path.resolve(__dirname, '..', '..', '..', 'azure');
     const python = process.env.PYTHON || 'python3';
@@ -43,18 +44,52 @@ function triggerAciUpdate({ subscriptionId, resourceGroup, groupName, envMap, po
       { cwd: orchestratorCwd, env: process.env }
     );
 
+    const emit = (msg, level = 'info') => {
+      if (!msg) return;
+      if (deploymentId) {
+        pushDeploymentLog(deploymentId, {
+          source: 'aci',
+          level,
+          message: msg,
+          deploymentService: 'azure',
+        }).catch(() => {});
+        io?.to(`deployment:${deploymentId}`).emit('deployment-log', {
+          deploymentId,
+          source: 'aci',
+          level,
+          message: msg,
+          timestamp: new Date().toISOString(),
+        });
+      }
+    };
+
+    emit(`[ACI Env Sync] Updating environment configuration for container group "${groupName}"...`, 'info');
+
     let output = '';
-    child.stdout.on('data', (d) => { output += d.toString(); });
-    child.stderr.on('data', (d) => { output += d.toString(); });
+    child.stdout.on('data', (d) => {
+      const text = d.toString();
+      output += text;
+      text.split('\n').map((l) => l.trim()).filter(Boolean).forEach((l) => emit(l, 'info'));
+    });
+    child.stderr.on('data', (d) => {
+      const text = d.toString();
+      output += text;
+      text.split('\n').map((l) => l.trim()).filter(Boolean).forEach((l) => emit(`[Error] ${l}`, 'error'));
+    });
     child.on('close', (code) => {
-      if (code === 0) resolve(output);
-      else reject(new Error(output || `Failed with exit code ${code}`));
+      if (code === 0) {
+        emit(`[ACI Env Sync] SUCCESS: Container updated and restarted with new environment configuration.`, 'success');
+        resolve(output);
+      } else {
+        emit(`[ACI Env Sync] FAILED: Container update exited with code ${code}.`, 'error');
+        reject(new Error(output || `Failed with exit code ${code}`));
+      }
     });
   });
 }
 
 // Helper to hot-sync updated environment variables to active ACI deployment
-async function syncToActiveAciDeployment(project) {
+async function syncToActiveAciDeployment(project, io = null) {
   const activeDeployment = await Deployment.findOne({
     $or: [
       { projectId: project._id },
@@ -62,20 +97,20 @@ async function syncToActiveAciDeployment(project) {
       { repositoryUrl: project.repositoryUrl },
     ],
     'infrastructure.provider': 'azure',
-    status: { $in: ['success', 'running', 'stopped'] },
+    status: { $in: ['success', 'running', 'stopped', 'failed'] },
   }).sort({ createdAt: -1 });
 
-  if (!activeDeployment) return false;
+  if (!activeDeployment) return { synced: false, deploymentId: null, containerGroupName: null };
 
   const groupName =
     activeDeployment.infrastructure?.aci?.containerGroupName ||
     activeDeployment.metadata?.containerName ||
     (activeDeployment.publicUrl?.match(/https?:\/\/(cg-[a-zA-Z0-9-]+)\./)?.[1]);
 
-  if (!groupName) return false;
+  if (!groupName) return { synced: false, deploymentId: activeDeployment._id.toString(), containerGroupName: null };
 
   const subId = process.env.AZURE_SUBSCRIPTION_ID;
-  if (!subId) return false;
+  if (!subId) return { synced: false, deploymentId: activeDeployment._id.toString(), containerGroupName: groupName };
 
   const rg =
     activeDeployment.infrastructure?.aci?.resourceGroupName ||
@@ -95,18 +130,21 @@ async function syncToActiveAciDeployment(project) {
   const port = envMap.PORT || activeDeployment.metadata?.containerPort || 80;
 
   try {
+    const deploymentId = activeDeployment._id.toString();
     const msg = await triggerAciUpdate({
       subscriptionId: subId,
       resourceGroup: rg,
       groupName,
       envMap,
       port,
+      io,
+      deploymentId,
     });
     console.log(`[ACI Sync] Updated live container ${groupName}:`, msg);
-    return true;
+    return { synced: true, deploymentId, containerGroupName: groupName };
   } catch (err) {
     console.error(`[ACI Sync Warning] Failed to update container ${groupName}:`, err.message);
-    return false;
+    return { synced: false, deploymentId: activeDeployment._id.toString(), containerGroupName: groupName, error: err.message };
   }
 }
 
@@ -242,9 +280,16 @@ const updateProject = async (req, res) => {
     await project.save();
 
     // Hot-sync to active deployment (e.g. ACI)
-    const aciSynced = await syncToActiveAciDeployment(project);
+    const io = req.app.get('io');
+    const syncResult = await syncToActiveAciDeployment(project, io);
 
-    return res.status(200).json({ success: true, project, aciSynced });
+    return res.status(200).json({
+      success: true,
+      project,
+      aciSynced: syncResult.synced,
+      deploymentId: syncResult.deploymentId,
+      containerGroupName: syncResult.containerGroupName,
+    });
   } catch (error) {
     console.error('Update project error:', error);
     return res.status(400).json({ success: false, error: error.message });
@@ -281,8 +326,15 @@ const addOrUpdateEnvVariable = async (req, res) => {
     project.updatedAt = new Date();
     await project.save();
 
-    const aciSynced = await syncToActiveAciDeployment(project);
-    return res.status(200).json({ success: true, project, aciSynced });
+    const io = req.app.get('io');
+    const syncResult = await syncToActiveAciDeployment(project, io);
+    return res.status(200).json({
+      success: true,
+      project,
+      aciSynced: syncResult.synced,
+      deploymentId: syncResult.deploymentId,
+      containerGroupName: syncResult.containerGroupName,
+    });
   } catch (error) {
     console.error('Add/update env variable error:', error);
     return res.status(400).json({ success: false, error: error.message });
@@ -303,8 +355,15 @@ const deleteEnvVariable = async (req, res) => {
     project.updatedAt = new Date();
     await project.save();
 
-    const aciSynced = await syncToActiveAciDeployment(project);
-    return res.status(200).json({ success: true, project, aciSynced });
+    const io = req.app.get('io');
+    const syncResult = await syncToActiveAciDeployment(project, io);
+    return res.status(200).json({
+      success: true,
+      project,
+      aciSynced: syncResult.synced,
+      deploymentId: syncResult.deploymentId,
+      containerGroupName: syncResult.containerGroupName,
+    });
   } catch (error) {
     console.error('Delete env variable error:', error);
     return res.status(400).json({ success: false, error: error.message });
@@ -317,4 +376,6 @@ module.exports = {
   updateProject,
   addOrUpdateEnvVariable,
   deleteEnvVariable,
+  syncToActiveAciDeployment,
+  triggerAciUpdate,
 };

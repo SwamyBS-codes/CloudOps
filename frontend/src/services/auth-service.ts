@@ -48,6 +48,9 @@ export const deploymentService = {
   getLogs: (id: string, params?: Record<string, any>) =>
     apiClient.get(generateEndpoint(ENDPOINTS.DEPLOYMENTS.LOGS, { id }), { params }),
 
+  getAppLogs: (id: string, params?: { tail?: number }) =>
+    apiClient.get(`/api/deployments/${encodeURIComponent(id)}/app-logs`, { params }),
+
   getStatus: (id: string) =>
     apiClient.get(generateEndpoint(ENDPOINTS.DEPLOYMENTS.STATUS, { id })),
 
@@ -62,6 +65,15 @@ export const deploymentService = {
 
   restart: (id: string) =>
     apiClient.post(`/api/deployments/${encodeURIComponent(id)}/restart`),
+
+  getEnvVariables: (id: string) =>
+    apiClient.get(`/api/deployments/${encodeURIComponent(id)}/env`),
+
+  updateEnvVariables: (id: string, data: { key?: string; value?: string; encrypted?: boolean; environmentVariables?: any }) =>
+    apiClient.post(`/api/deployments/${encodeURIComponent(id)}/env`, data),
+
+  deleteEnvVariable: (id: string, key: string) =>
+    apiClient.delete(`/api/deployments/${encodeURIComponent(id)}/env/${encodeURIComponent(key)}`),
 
   terminateAzureDeployment: (id: string) =>
     apiClient.delete(generateEndpoint(ENDPOINTS.DEPLOYMENTS.DELETE, { id })),

@@ -8,6 +8,7 @@ import {
   Play,
   RefreshCw,
   Rocket,
+  Sliders,
   Trash2,
   X,
 } from 'lucide-react';
@@ -54,6 +55,7 @@ const LiveProjectCard = ({
   const liveUrl = deploymentUrl(deployment);
   const provider = resolveDeploymentProvider(deployment);
   const isStopped = deployment.status === 'stopped';
+  const navigate = useNavigate();
 
   return (
     <article className="flex min-w-0 flex-col border border-white/10 bg-[#0C0C0C] transition-colors hover:border-white/20">
@@ -141,6 +143,18 @@ const LiveProjectCard = ({
           >
             <Trash2 className="h-3 w-3" />
             Terminate
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(`/deployments/${deployment._id}#deployment-env`);
+            }}
+            className="inline-flex items-center gap-1 rounded border border-white/10 bg-[#161616] px-2.5 py-1 text-xs font-medium text-neutral-300 transition hover:bg-white/[0.08] hover:text-white"
+            title="Configure Environment Variables"
+          >
+            <Sliders className="h-3 w-3 text-emerald-400" />
+            Env
           </button>
         </div>
 

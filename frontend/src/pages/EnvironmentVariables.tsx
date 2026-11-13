@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
+  ArrowRight,
   Check,
   Copy,
   Database,
+  ExternalLink,
   Eye,
   EyeOff,
   FileText,
@@ -48,12 +51,17 @@ type ProjectData = {
 };
 
 export default function EnvironmentVariablesPage() {
+  const navigate = useNavigate();
   const [projects, setProjects] = useState<ProjectData[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [syncFeedback, setSyncFeedback] = useState<{
+    message: string;
+    deploymentId?: string | null;
+    containerGroupName?: string | null;
+  } | null>(null);
   const [query, setQuery] = useState('');
 
   // Visibility map: `${projectId}:${key}` -> boolean
@@ -109,7 +117,7 @@ export default function EnvironmentVariablesPage() {
     if (!addModalOpen || !varKey.trim()) return;
     setSaving(true);
     setError(null);
-    setSuccessMessage(null);
+    setSyncFeedback(null);
 
     try {
       const res = await projectService.addEnvVariable(addModalOpen.projectId, {
@@ -118,12 +126,18 @@ export default function EnvironmentVariablesPage() {
         encrypted: varEncrypted,
       });
 
-      const aciSynced = (res.data as any)?.aciSynced;
-      setSuccessMessage(
-        aciSynced
-          ? `Added "${varKey.trim()}" and synced to live container!`
-          : `Added "${varKey.trim()}" successfully.`
-      );
+      const data = res.data as any;
+      const aciSynced = data?.aciSynced;
+      const deploymentId = data?.deploymentId;
+      const containerGroupName = data?.containerGroupName;
+
+      setSyncFeedback({
+        message: aciSynced
+          ? `Added "${varKey.trim()}" and synced to live container${containerGroupName ? ` (${containerGroupName})` : ''}!`
+          : `Added "${varKey.trim()}" successfully.`,
+        deploymentId: aciSynced ? deploymentId : null,
+        containerGroupName,
+      });
 
       setAddModalOpen(null);
       setVarKey('');
@@ -142,7 +156,7 @@ export default function EnvironmentVariablesPage() {
     if (!editModalOpen || !editModalOpen.key) return;
     setSaving(true);
     setError(null);
-    setSuccessMessage(null);
+    setSyncFeedback(null);
 
     try {
       const res = await projectService.addEnvVariable(editModalOpen.projectId, {
@@ -151,12 +165,18 @@ export default function EnvironmentVariablesPage() {
         encrypted: varEncrypted,
       });
 
-      const aciSynced = (res.data as any)?.aciSynced;
-      setSuccessMessage(
-        aciSynced
-          ? `Updated "${editModalOpen.key}" and synced to live container!`
-          : `Updated "${editModalOpen.key}" successfully.`
-      );
+      const data = res.data as any;
+      const aciSynced = data?.aciSynced;
+      const deploymentId = data?.deploymentId;
+      const containerGroupName = data?.containerGroupName;
+
+      setSyncFeedback({
+        message: aciSynced
+          ? `Updated "${editModalOpen.key}" and synced to live container${containerGroupName ? ` (${containerGroupName})` : ''}!`
+          : `Updated "${editModalOpen.key}" successfully.`,
+        deploymentId: aciSynced ? deploymentId : null,
+        containerGroupName,
+      });
 
       setEditModalOpen(null);
       setVarValue('');
@@ -173,16 +193,22 @@ export default function EnvironmentVariablesPage() {
     if (!deleteConfirm) return;
     setSaving(true);
     setError(null);
-    setSuccessMessage(null);
+    setSyncFeedback(null);
 
     try {
       const res = await projectService.deleteEnvVariable(deleteConfirm.projectId, deleteConfirm.key);
-      const aciSynced = (res.data as any)?.aciSynced;
-      setSuccessMessage(
-        aciSynced
-          ? `Deleted "${deleteConfirm.key}" and updated live container!`
-          : `Deleted "${deleteConfirm.key}" successfully.`
-      );
+      const data = res.data as any;
+      const aciSynced = data?.aciSynced;
+      const deploymentId = data?.deploymentId;
+      const containerGroupName = data?.containerGroupName;
+
+      setSyncFeedback({
+        message: aciSynced
+          ? `Deleted "${deleteConfirm.key}" and updated live container${containerGroupName ? ` (${containerGroupName})` : ''}!`
+          : `Deleted "${deleteConfirm.key}" successfully.`,
+        deploymentId: aciSynced ? deploymentId : null,
+        containerGroupName,
+      });
 
       setDeleteConfirm(null);
       await fetchProjects(true);
@@ -198,7 +224,7 @@ export default function EnvironmentVariablesPage() {
     if (!bulkModalOpen || !bulkText.trim()) return;
     setSaving(true);
     setError(null);
-    setSuccessMessage(null);
+    setSyncFeedback(null);
 
     try {
       // Parse key=value lines
@@ -227,12 +253,18 @@ export default function EnvironmentVariablesPage() {
         environmentVariables: parsedVars,
       });
 
-      const aciSynced = (res.data as any)?.aciSynced;
-      setSuccessMessage(
-        aciSynced
-          ? `Imported ${Object.keys(parsedVars).length} variables and synced to live container!`
-          : `Imported ${Object.keys(parsedVars).length} variables successfully.`
-      );
+      const data = res.data as any;
+      const aciSynced = data?.aciSynced;
+      const deploymentId = data?.deploymentId;
+      const containerGroupName = data?.containerGroupName;
+
+      setSyncFeedback({
+        message: aciSynced
+          ? `Imported ${Object.keys(parsedVars).length} variables and synced to live container${containerGroupName ? ` (${containerGroupName})` : ''}!`
+          : `Imported ${Object.keys(parsedVars).length} variables successfully.`,
+        deploymentId: aciSynced ? deploymentId : null,
+        containerGroupName,
+      });
 
       setBulkModalOpen(null);
       setBulkText('');
@@ -316,10 +348,22 @@ export default function EnvironmentVariablesPage() {
           </div>
         )}
 
-        {successMessage && (
-          <div className="mt-4 flex items-center gap-2 rounded-2xl border border-emerald-400/40 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-300">
-            <Check className="h-4 w-4 shrink-0" />
-            <span>{successMessage}</span>
+        {syncFeedback && (
+          <div className="mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl border border-emerald-400/40 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-300">
+            <div className="flex items-center gap-2">
+              <Check className="h-4 w-4 shrink-0" />
+              <span>{syncFeedback.message}</span>
+            </div>
+            {syncFeedback.deploymentId && (
+              <button
+                type="button"
+                onClick={() => navigate(`/deployments/${syncFeedback.deploymentId}`)}
+                className="inline-flex items-center gap-1.5 self-start sm:self-auto rounded-xl border border-emerald-400/40 bg-emerald-400/20 px-3.5 py-1.5 text-xs font-semibold text-emerald-200 transition hover:bg-emerald-400/30"
+              >
+                <span>View Live Restart Logs</span>
+                <ArrowRight className="h-3.5 w-3.5" />
+              </button>
+            )}
           </div>
         )}
 
@@ -369,7 +413,7 @@ export default function EnvironmentVariablesPage() {
                           </span>
                         )}
                       </div>
-                      <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
+                      <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                         <span>{envList.length} variable{envList.length === 1 ? '' : 's'}</span>
                         {liveDep?.liveUrl && (
                           <a
@@ -381,6 +425,17 @@ export default function EnvironmentVariablesPage() {
                             <Globe2 className="h-3 w-3" />
                             {liveDep.liveUrl}
                           </a>
+                        )}
+                        {liveDep?._id && (
+                          <button
+                            type="button"
+                            onClick={() => navigate(`/deployments/${liveDep._id}`)}
+                            className="inline-flex items-center gap-1 text-primary hover:underline font-mono"
+                            title="Inspect live deployment and restart logs"
+                          >
+                            <span>Deployment logs ({liveDep._id.slice(-8)})</span>
+                            <ExternalLink className="h-3 w-3" />
+                          </button>
                         )}
                       </div>
                     </div>

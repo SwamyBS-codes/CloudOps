@@ -62,11 +62,12 @@ class DeploymentManager {
     const mapping = getMappingForApplicationType(applicationType);
     const strategy = this.resolveStrategy(applicationType, infrastructureOverride);
 
+    const requestedProvider = input.provider || (input.target?.type === 'aws' ? 'aws' : mapping.provider);
     const enrichedInput = {
       ...input,
       applicationType,
       deploymentType: mapping.deploymentType,
-      provider: mapping.provider,
+      provider: requestedProvider,
       applicationName: input.applicationName || input.repositoryName,
     };
 

@@ -420,12 +420,235 @@ const startBuild = async (req, res) => {
     }
 };
 
+const findDeploymentByIdOrKey = (id) => {
+    if (!id) return Promise.resolve(null);
+    const strId = String(id);
+    const isObjectId = mongoose.Types.ObjectId.isValid(strId) && strId.length === 24;
+    return Deployment.findOne({
+        $or: [
+            isObjectId ? { _id: strId } : null,
+            { deploymentId: strId },
+        ].filter(Boolean),
+    });
+};
+
+const resolveAzureContainerGroupName = (deployment) => {
+    if (!deployment) return null;
+    return (
+        deployment.infrastructure?.aci?.containerGroupName ||
+        deployment.metadata?.containerName ||
+        deployment.publicUrl?.match(/https?:\/\/(cg-[a-zA-Z0-9-]+)\./)?.[1] ||
+        null
+    );
+};
+
+const isAzureDeploymentRecord = (deployment) => {
+    if (!deployment) return false;
+    return (
+        deployment.deploymentService === 'azure' ||
+        deployment.provider === 'azure' ||
+        Boolean(deployment.infrastructure?.aci) ||
+        Boolean(deployment.infrastructure?.acr) ||
+        Boolean(deployment.publicUrl && deployment.publicUrl.includes('azurecontainer.io'))
+    );
+};
+
+const isAwsDeploymentRecord = (deployment) => {
+    if (!deployment) return false;
+    return (
+        deployment.deploymentService === 'aws' ||
+        deployment.provider === 'aws' ||
+        deployment.infrastructure?.provider === 'aws' ||
+        deployment.infrastructure?.targetType === 'aws' ||
+        Boolean(deployment.infrastructure?.ec2?.instanceId) ||
+        Boolean(deployment.metadata?.ec2?.instanceId) ||
+        Boolean(deployment.metadata?.instanceId)
+    );
+};
+
+const resolveAwsInstanceId = (deployment) => {
+    if (!deployment) return null;
+    return (
+        deployment.infrastructure?.ec2?.instanceId ||
+        deployment.metadata?.ec2?.instanceId ||
+        deployment.metadata?.instanceId ||
+        null
+    );
+};
+
+const isStaticDeploymentRecord = (deployment) => {
+    if (!deployment) return false;
+    return (
+        deployment.deploymentType === 'static-hosting' ||
+        deployment.applicationType === 'frontend-website' ||
+        Boolean(deployment.infrastructure?.s3?.bucketName) ||
+        Boolean(deployment.publicUrl && deployment.publicUrl.includes('web.core.windows.net'))
+    );
+};
+
 const getDeploymentStatus = async (req, res) => {
     try {
-        const deployment = await deploymentEngine.getDeploymentDetails(req.params.deploymentId);
-        return res.status(200).json({ success: true, deployment });
+        const deploymentId = req.params.deploymentId || req.params.id;
+        const deployment = await findDeploymentByIdOrKey(deploymentId);
+        if (!deployment) {
+            return res.status(404).json({ success: false, error: 'Deployment not found' });
+        }
+
+        // Live cloud probe if deployment is in completed/running state
+        let liveCloudStatus = null;
+        if (isAzureDeploymentRecord(deployment)) {
+            const groupName = resolveAzureContainerGroupName(deployment);
+            if (groupName && process.env.AZURE_SUBSCRIPTION_ID) {
+                try {
+                    const { getAzureAciStatus } = require('../services/azureDeployService');
+                    const aciStatus = await getAzureAciStatus(groupName);
+                    liveCloudStatus = aciStatus;
+
+                    if (aciStatus && aciStatus.state) {
+                        const previousStatus = deployment.status;
+                        if (aciStatus.state === 'Running') {
+                            deployment.status = 'success';
+                            deployment.healthStatus = 'healthy';
+                        } else if (aciStatus.state === 'Stopped' || aciStatus.state === 'Terminated') {
+                            deployment.status = 'stopped';
+                        } else if (aciStatus.detail_status?.includes('CrashLoopBackOff') || aciStatus.detail_status === 'Error') {
+                            deployment.status = 'failed';
+                            deployment.healthStatus = 'unhealthy';
+                            deployment.error = {
+                                message: aciStatus.detail_status || 'Container exited with error',
+                                state: aciStatus.state,
+                            };
+                        }
+
+                        if (deployment.infrastructure?.aci) {
+                            deployment.infrastructure.aci.status = aciStatus.state;
+                            deployment.infrastructure.aci.detailStatus = aciStatus.detail_status;
+                            deployment.markModified('infrastructure');
+                        }
+                        await deployment.save();
+                    }
+                } catch (aciErr) {
+                    console.warn(`[ACI Live Status Probe Warning] ${groupName}:`, aciErr.message);
+                }
+            }
+        } else if (isAwsDeploymentRecord(deployment)) {
+            const instanceId = resolveAwsInstanceId(deployment);
+            if (instanceId && process.env.AWS_ACCESS_KEY_ID) {
+                try {
+                    const ec2Service = require('../services/aws/ec2Service');
+                    const ec2Status = await ec2Service.getInstanceStatus(instanceId);
+                    liveCloudStatus = ec2Status;
+                    if (ec2Status && ec2Status.instanceState) {
+                        if (ec2Status.instanceState === 'running') {
+                            deployment.status = 'running';
+                            deployment.healthStatus = 'healthy';
+                        } else if (ec2Status.instanceState === 'stopped') {
+                            deployment.status = 'stopped';
+                        } else if (['shutting-down', 'terminated'].includes(ec2Status.instanceState)) {
+                            deployment.status = 'closed';
+                        }
+                        await deployment.save();
+                    }
+                } catch (ec2Err) {
+                    console.warn(`[EC2 Live Status Probe Warning] ${instanceId}:`, ec2Err.message);
+                }
+            }
+        }
+
+        const details = await deploymentEngine.getDeploymentDetails(deploymentId);
+        return res.status(200).json({ success: true, deployment: details, liveCloudStatus });
     } catch (error) {
         return res.status(404).json({ success: false, error: error.message });
+    }
+};
+
+const getAppRuntimeLogs = async (req, res) => {
+    try {
+        const deploymentId = req.params.deploymentId || req.params.id;
+        const deployment = await findDeploymentByIdOrKey(deploymentId);
+        if (!deployment) {
+            return res.status(404).json({ success: false, error: 'Deployment not found' });
+        }
+
+        const tail = Number(req.query.tail || 300);
+
+        // 1. Azure ACI Live Container Logs
+        if (isAzureDeploymentRecord(deployment)) {
+            const groupName = resolveAzureContainerGroupName(deployment);
+            if (!groupName) {
+                return res.status(200).json({
+                    success: true,
+                    deploymentId,
+                    source: 'azure-aci',
+                    logs: '',
+                    notice: 'No active container group found for this deployment.',
+                });
+            }
+
+            const { getAzureAciLogs } = require('../services/azureDeployService');
+            const aciLogs = await getAzureAciLogs(groupName, tail);
+
+            return res.status(200).json({
+                success: true,
+                deploymentId,
+                source: 'azure-aci',
+                containerName: aciLogs.container_name || 'task',
+                state: aciLogs.state || null,
+                detailStatus: aciLogs.detail_status || null,
+                previousState: aciLogs.previous_state || null,
+                logs: aciLogs.content || '',
+            });
+        }
+
+        // 2. AWS EC2 System Console / Container Logs
+        if (isAwsDeploymentRecord(deployment)) {
+            const instanceId = resolveAwsInstanceId(deployment);
+            if (!instanceId) {
+                return res.status(200).json({
+                    success: true,
+                    deploymentId,
+                    source: 'aws-ec2',
+                    logs: '',
+                    notice: 'No active EC2 instance found for this deployment.',
+                });
+            }
+
+            const ec2Service = require('../services/aws/ec2Service');
+            const consoleOutput = await ec2Service.getConsoleOutput(instanceId);
+
+            return res.status(200).json({
+                success: true,
+                deploymentId,
+                source: 'aws-ec2',
+                instanceId,
+                logs: consoleOutput || '',
+            });
+        }
+
+        // 3. Local / Remote Docker Container Logs
+        const containerName = deployment.metadata?.containerName;
+        if (containerName) {
+            const dockerService = require('../services/dockerService');
+            const rawLogs = await dockerService.getContainerLogs(containerName, null, tail).catch(() => '');
+            return res.status(200).json({
+                success: true,
+                deploymentId,
+                source: 'docker',
+                containerName,
+                logs: rawLogs || '',
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            deploymentId,
+            source: 'none',
+            logs: '',
+            notice: 'Live app runtime logs are not applicable for static storage hosting.',
+        });
+    } catch (error) {
+        console.error('getAppRuntimeLogs error:', error);
+        return res.status(500).json({ success: false, error: error.message });
     }
 };
 
@@ -480,37 +703,43 @@ const getDeploymentServiceLogs = async (req, res) => {
     }
 };
 
-const findDeploymentByIdOrKey = (id) => {
-    if (!id) return Promise.resolve(null);
-    const strId = String(id);
-    const isObjectId = mongoose.Types.ObjectId.isValid(strId) && strId.length === 24;
-    return Deployment.findOne({
-        $or: [
-            isObjectId ? { _id: strId } : null,
-            { deploymentId: strId },
-        ].filter(Boolean),
-    });
-};
-
-const isAzureDeploymentRecord = (deployment) => {
-    if (!deployment) return false;
-    return (
-        deployment.deploymentService === 'azure' ||
-        deployment.provider === 'azure' ||
-        Boolean(deployment.infrastructure?.aci) ||
-        Boolean(deployment.infrastructure?.acr) ||
-        Boolean(deployment.publicUrl && deployment.publicUrl.includes('azurecontainer.io'))
-    );
-};
-
 const stopDeployment = async (req, res) => {
     try {
         const deploymentId = req.params.deploymentId || req.params.id;
         const deployment = await findDeploymentByIdOrKey(deploymentId);
 
+        if (isStaticDeploymentRecord(deployment)) {
+            return res.status(200).json({
+                success: true,
+                message: 'Static site is hosted on cloud storage CDN with zero idle compute cost.',
+                status: deployment.status || 'success',
+            });
+        }
+
         if (deployment && isAzureDeploymentRecord(deployment)) {
             const result = await stopAzureDeployment(deployment._id, req.app.get('io'));
             return res.status(200).json(result);
+        }
+
+        if (deployment && isAwsDeploymentRecord(deployment)) {
+            const instanceId = resolveAwsInstanceId(deployment);
+            if (instanceId) {
+                const ec2Service = require('../services/aws/ec2Service');
+                await ec2Service.stopInstance(instanceId);
+                deployment.status = 'stopped';
+                deployment.phase = 'stopped';
+                await deployment.save();
+
+                const io = req.app.get('io');
+                io?.to(`deployment:${deployment._id}`).emit('deployment-log', {
+                    deploymentId: deployment._id.toString(),
+                    source: 'aws',
+                    level: 'info',
+                    message: `[AWS EC2] Instance ${instanceId} stopped successfully.`,
+                    timestamp: new Date().toISOString(),
+                });
+                return res.status(200).json({ success: true, status: 'stopped', instanceId });
+            }
         }
 
         const result = await deploymentEngine.stopDeployment(deploymentId, req.app.get('io'));
@@ -525,9 +754,38 @@ const startDeployment = async (req, res) => {
         const deploymentId = req.params.deploymentId || req.params.id;
         const deployment = await findDeploymentByIdOrKey(deploymentId);
 
+        if (isStaticDeploymentRecord(deployment)) {
+            return res.status(200).json({
+                success: true,
+                message: 'Static site is already active and served via CDN.',
+                status: deployment.status || 'success',
+            });
+        }
+
         if (deployment && isAzureDeploymentRecord(deployment)) {
             const result = await startAzureDeployment(deployment._id, req.app.get('io'));
             return res.status(200).json(result);
+        }
+
+        if (deployment && isAwsDeploymentRecord(deployment)) {
+            const instanceId = resolveAwsInstanceId(deployment);
+            if (instanceId) {
+                const ec2Service = require('../services/aws/ec2Service');
+                await ec2Service.startInstance(instanceId);
+                deployment.status = 'running';
+                deployment.phase = 'running';
+                await deployment.save();
+
+                const io = req.app.get('io');
+                io?.to(`deployment:${deployment._id}`).emit('deployment-log', {
+                    deploymentId: deployment._id.toString(),
+                    source: 'aws',
+                    level: 'info',
+                    message: `[AWS EC2] Instance ${instanceId} started successfully.`,
+                    timestamp: new Date().toISOString(),
+                });
+                return res.status(200).json({ success: true, status: 'running', instanceId });
+            }
         }
 
         const result = await deploymentEngine.restartDeployment(deploymentId, req.app.get('io'));
@@ -580,6 +838,30 @@ const terminateDeployment = async (req, res) => {
         if (isAzureDeploymentRecord(deployment)) {
             const result = await deleteAzureDeployment(deployment._id, req.app.get('io'));
             return res.status(200).json(result);
+        }
+
+        if (isAwsDeploymentRecord(deployment)) {
+            const instanceId = resolveAwsInstanceId(deployment);
+            if (instanceId) {
+                const ec2Service = require('../services/aws/ec2Service');
+                await ec2Service.terminateInstance(instanceId).catch((err) => {
+                    console.warn(`[AWS EC2 Terminate Warning] ${instanceId}:`, err.message);
+                });
+            }
+            deployment.status = 'closed';
+            deployment.phase = 'complete';
+            deployment.completedAt = new Date();
+            await deployment.save();
+
+            const io = req.app.get('io');
+            io?.to(`deployment:${deployment._id}`).emit('deployment-log', {
+                deploymentId: deployment._id.toString(),
+                source: 'aws',
+                level: 'info',
+                message: `[AWS EC2] Instance ${instanceId || ''} terminated. Deployment closed.`,
+                timestamp: new Date().toISOString(),
+            });
+            return res.status(200).json({ success: true, status: 'closed', instanceId });
         }
 
         try {
@@ -761,6 +1043,217 @@ const startAWSEC2Deployment = async (req, res) => {
   }
 };
 
+// Get deployment environment variables
+const getDeploymentEnvVariables = async (req, res) => {
+  try {
+    const deploymentId = req.params.deploymentId || req.params.id;
+    const deployment = await findDeploymentByIdOrKey(deploymentId);
+    if (!deployment) return res.status(404).json({ error: 'Deployment not found' });
+
+    return res.status(200).json({
+      success: true,
+      deploymentId,
+      environmentVariables: deployment.environmentVariables || [],
+    });
+  } catch (error) {
+    console.error('Get deployment env variables error:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// Add or update deployment environment variables
+const updateDeploymentEnvVariables = async (req, res) => {
+  const io = req.app.get('io');
+  try {
+    const deploymentId = req.params.deploymentId || req.params.id;
+    const deployment = await findDeploymentByIdOrKey(deploymentId);
+    if (!deployment) return res.status(404).json({ error: 'Deployment not found' });
+
+    let updatedVars = Array.isArray(deployment.environmentVariables) ? [...deployment.environmentVariables] : [];
+
+    // Check if bulk object or array passed
+    if (req.body.environmentVariables) {
+      if (Array.isArray(req.body.environmentVariables)) {
+        updatedVars = req.body.environmentVariables.map((v) => ({
+          key: String(v.key).trim().toUpperCase(),
+          value: String(v.value ?? ''),
+          encrypted: Boolean(v.encrypted),
+        }));
+      } else if (typeof req.body.environmentVariables === 'object') {
+        updatedVars = Object.entries(req.body.environmentVariables).map(([k, v]) => ({
+          key: String(k).trim().toUpperCase(),
+          value: String(v ?? ''),
+          encrypted: false,
+        }));
+      }
+    } else if (req.body.key) {
+      // Single key update
+      const key = String(req.body.key).trim().toUpperCase();
+      const value = String(req.body.value ?? '');
+      const encrypted = Boolean(req.body.encrypted);
+      const existingIdx = updatedVars.findIndex((v) => v.key === key);
+      if (existingIdx >= 0) {
+        updatedVars[existingIdx].value = value;
+        if (typeof req.body.encrypted !== 'undefined') updatedVars[existingIdx].encrypted = encrypted;
+      } else {
+        updatedVars.push({ key, value, encrypted });
+      }
+    } else {
+      return res.status(400).json({ error: 'key and value or environmentVariables object required' });
+    }
+
+    deployment.environmentVariables = updatedVars;
+    deployment.updatedAt = new Date();
+    await deployment.save();
+
+    // Also update linked project if any
+    const projectQuery = deployment.projectId
+      ? { _id: deployment.projectId }
+      : {
+          $or: [
+            { repositoryUrl: deployment.repositoryUrl },
+            { repositoryName: deployment.repositoryName },
+          ],
+        };
+    const project = await Project.findOne(projectQuery);
+    if (project) {
+      project.environmentVariables = updatedVars;
+      project.updatedAt = new Date();
+      await project.save();
+    }
+
+    // Hot-sync to ACI if this is an active or existing Azure deployment
+    let aciSynced = false;
+    let groupName =
+      deployment.infrastructure?.aci?.containerGroupName ||
+      deployment.metadata?.containerName ||
+      deployment.publicUrl?.match(/https?:\/\/(cg-[a-zA-Z0-9-]+)\./)?.[1];
+
+    if (groupName && process.env.AZURE_SUBSCRIPTION_ID) {
+      const subId = process.env.AZURE_SUBSCRIPTION_ID;
+      const rg =
+        deployment.infrastructure?.aci?.resourceGroupName ||
+        process.env.AZURE_RESOURCE_GROUP ||
+        'cloudops-reg';
+
+      const envMap = {};
+      updatedVars.forEach((e) => {
+        if (e && e.key) envMap[e.key] = e.value;
+      });
+      const port = envMap.PORT || deployment.metadata?.containerPort || 80;
+
+      try {
+        const { triggerAciUpdate } = require('./projectController');
+        await triggerAciUpdate({
+          subscriptionId: subId,
+          resourceGroup: rg,
+          groupName,
+          envMap,
+          port,
+          io,
+          deploymentId: deployment._id.toString(),
+        });
+        aciSynced = true;
+      } catch (syncErr) {
+        console.error('[Deployment Env Sync Warning]:', syncErr.message);
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      deploymentId,
+      containerGroupName: groupName || null,
+      aciSynced,
+      environmentVariables: deployment.environmentVariables,
+    });
+  } catch (error) {
+    console.error('Update deployment env variables error:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// Delete single deployment environment variable
+const deleteDeploymentEnvVariable = async (req, res) => {
+  const io = req.app.get('io');
+  try {
+    const deploymentId = req.params.deploymentId || req.params.id;
+    const { key } = req.params;
+    if (!key) return res.status(400).json({ error: 'key is required' });
+
+    const deployment = await findDeploymentByIdOrKey(deploymentId);
+    if (!deployment) return res.status(404).json({ error: 'Deployment not found' });
+
+    const targetKey = String(key).trim().toUpperCase();
+    deployment.environmentVariables = (deployment.environmentVariables || []).filter((v) => v.key !== targetKey);
+    deployment.updatedAt = new Date();
+    await deployment.save();
+
+    // Also update linked project if any
+    const projectQuery = deployment.projectId
+      ? { _id: deployment.projectId }
+      : {
+          $or: [
+            { repositoryUrl: deployment.repositoryUrl },
+            { repositoryName: deployment.repositoryName },
+          ],
+        };
+    const project = await Project.findOne(projectQuery);
+    if (project) {
+      project.environmentVariables = deployment.environmentVariables;
+      project.updatedAt = new Date();
+      await project.save();
+    }
+
+    // Hot-sync to ACI if this is an active or existing Azure deployment
+    let aciSynced = false;
+    let groupName =
+      deployment.infrastructure?.aci?.containerGroupName ||
+      deployment.metadata?.containerName ||
+      deployment.publicUrl?.match(/https?:\/\/(cg-[a-zA-Z0-9-]+)\./)?.[1];
+
+    if (groupName && process.env.AZURE_SUBSCRIPTION_ID) {
+      const subId = process.env.AZURE_SUBSCRIPTION_ID;
+      const rg =
+        deployment.infrastructure?.aci?.resourceGroupName ||
+        process.env.AZURE_RESOURCE_GROUP ||
+        'cloudops-reg';
+
+      const envMap = {};
+      (deployment.environmentVariables || []).forEach((e) => {
+        if (e && e.key) envMap[e.key] = e.value;
+      });
+      const port = envMap.PORT || deployment.metadata?.containerPort || 80;
+
+      try {
+        const { triggerAciUpdate } = require('./projectController');
+        await triggerAciUpdate({
+          subscriptionId: subId,
+          resourceGroup: rg,
+          groupName,
+          envMap,
+          port,
+          io,
+          deploymentId: deployment._id.toString(),
+        });
+        aciSynced = true;
+      } catch (syncErr) {
+        console.error('[Deployment Env Sync Warning]:', syncErr.message);
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      deploymentId,
+      containerGroupName: groupName || null,
+      aciSynced,
+      environmentVariables: deployment.environmentVariables,
+    });
+  } catch (error) {
+    console.error('Delete deployment env variable error:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+};
+
 module.exports = {
     initDeploy,
     scanApplication,
@@ -774,6 +1267,10 @@ module.exports = {
     getDeploymentStatus,
     getDeploymentLogs,
     getDeploymentServiceLogs,
+    getAppRuntimeLogs,
+    getDeploymentEnvVariables,
+    updateDeploymentEnvVariables,
+    deleteDeploymentEnvVariable,
     stopDeployment,
     startDeployment,
     cancelQueuedDeployment,

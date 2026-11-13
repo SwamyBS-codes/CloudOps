@@ -263,6 +263,7 @@ async function emitLog(io, socketId, message, deployment, source = 'azure', leve
 async function runAzureDeployment({
   repoUrl,
   appName,
+  branch = 'main',
   socketId,
   io,
   userId,
@@ -308,6 +309,7 @@ async function runAzureDeployment({
       userId: userId || 'anonymous',
       repositoryUrl: repoUrl,
       repositoryName: sanitizedName,
+      branch: branch || 'main',
       applicationType,
       applicationName: applicationName || sanitizedName,
       deploymentType,
@@ -379,6 +381,7 @@ async function runAzureDeployment({
 
         blobInfo = await blobBuildService.streamGitHubToBlob({
           repoUrl,
+          branch: branch || 'main',
           deploymentId,
           appName: sanitizedName,
           githubToken,
@@ -451,11 +454,15 @@ async function runAzureDeployment({
 
       if (activeItem.cancelled) throw new Error('Deployment cancelled by user');
 
-      await git.clone(repoUrl, cloneDir);
+      try {
+        await git.clone(repoUrl, cloneDir, ['--branch', branch, '--single-branch']);
+      } catch (_) {
+        await git.clone(repoUrl, cloneDir);
+      }
       if (activeItem.cancelled) throw new Error('Deployment cancelled by user');
 
-      await emitLog(io, socketId, '[Azure] Repository cloned.', deployment, 'git', 'success');
-      logLines.push(`[Azure] Cloned ${repoUrl}`);
+      await emitLog(io, socketId, `[Azure] Repository cloned (branch: ${branch}).`, deployment, 'git', 'success');
+      logLines.push(`[Azure] Cloned ${repoUrl}#${branch}`);
 
       const buildPlan = await ensureDockerfile(cloneDir);
       containerPort = buildPlan?.containerPort || DEFAULT_CONTAINER_PORT;
@@ -639,24 +646,26 @@ async function runAzureDeployment({
 /**
  * Manage Azure ACI Container Group lifecycle via orchestrator.core.aci_lifecycle
  */
-async function manageAciLifecycle({ action, groupName }) {
+async function manageAciLifecycle({ action, groupName, tail = 300 }) {
   const cfg = azureConfig();
   const subscriptionId = process.env.AZURE_SUBSCRIPTION_ID;
   if (!subscriptionId) throw new Error('AZURE_SUBSCRIPTION_ID is missing from environment');
   const rg = cfg.resourceGroup;
 
-  const resultStr = await runCommand(
-    cfg.python,
-    [
-      '-m',
-      'orchestrator.core.aci_lifecycle',
-      '--action', action,
-      '--subscription-id', subscriptionId,
-      '--resource-group', rg,
-      '--group-name', groupName,
-    ],
-    { cwd: cfg.orchestratorCwd }
-  );
+  const args = [
+    '-m',
+    'orchestrator.core.aci_lifecycle',
+    '--action', action,
+    '--subscription-id', subscriptionId,
+    '--resource-group', rg,
+    '--group-name', groupName,
+  ];
+
+  if (action === 'logs') {
+    args.push('--tail', String(tail || 300));
+  }
+
+  const resultStr = await runCommand(cfg.python, args, { cwd: cfg.orchestratorCwd });
 
   try {
     const lines = resultStr.trim().split('\n');
@@ -664,6 +673,14 @@ async function manageAciLifecycle({ action, groupName }) {
   } catch (_e) {
     return { action, group_name: groupName, status: 'done' };
   }
+}
+
+async function getAzureAciStatus(groupName) {
+  return manageAciLifecycle({ action: 'status', groupName });
+}
+
+async function getAzureAciLogs(groupName, tail = 300) {
+  return manageAciLifecycle({ action: 'logs', groupName, tail });
 }
 
 function resolveAzureContainerGroupName(deployment) {
@@ -833,4 +850,7 @@ module.exports = {
   startAzureDeployment,
   deleteAzureDeployment,
   manageAciLifecycle,
+  getAzureAciStatus,
+  getAzureAciLogs,
+  resolveAzureContainerGroupName,
 };
