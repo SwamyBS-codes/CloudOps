@@ -26,26 +26,6 @@ const computeRouterBasename = () => {
     return normalizeBasename(baseTagHref);
   }
 
-  const pathSegments = window.location.pathname.split('/').filter(Boolean);
-  const knownRouteRoots = new Set([
-    'login',
-    'demo',
-    'dashboard',
-    'analytics',
-    'billing',
-    'settings',
-    'deployments',
-    'deployment-logs',
-    'live-projects',
-    'environment-variables',
-    'deploy',
-    'docs',
-  ]);
-
-  if (pathSegments.length > 0 && !knownRouteRoots.has(pathSegments[0])) {
-    return normalizeBasename(`/${pathSegments[0]}/`);
-  }
-
   return '/';
 };
 
@@ -54,6 +34,8 @@ const queryClient = new QueryClient({
     queries: {
       staleTime: 1000 * 60 * 5, // 5 minutes
       gcTime: 1000 * 60 * 10, // 10 minutes (formerly cacheTime)
+      retry: 1,
+      refetchOnWindowFocus: false,
     },
   },
 });

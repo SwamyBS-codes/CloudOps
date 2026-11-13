@@ -9,15 +9,20 @@ const data = [
   { name: 'Other', value: 2620 },
 ];
 
-const COLORS = ['#60a5fa', '#7c3aed', '#fb7185', '#f59e0b'];
+const COLORS = [
+  'hsl(var(--chart-1))',
+  'hsl(var(--chart-2))',
+  'hsl(var(--chart-3))',
+  'hsl(var(--chart-4))',
+];
 
 const CostBreakdownChart: React.FC = () => (
-  <motion.div initial={{opacity:0,y:6}} animate={{opacity:1,y:0}} className="backdrop-blur-md bg-[rgba(12,16,26,0.6)] border border-white/6 rounded-xl p-4">
+  <motion.div initial={{opacity:0,y:6}} animate={{opacity:1,y:0}} className="dark-chart bg-card border border-border rounded-xl p-4">
     <div className="flex items-center justify-between mb-2">
-      <h3 className="text-sm font-semibold text-white">AWS Cost Breakdown</h3>
-      <div className="text-xs text-white/60">Last 30 days</div>
+      <h3 className="text-sm font-semibold text-foreground">AWS Cost Breakdown</h3>
+      <div className="text-xs text-muted-foreground">Last 30 days</div>
     </div>
-    <div style={{ width: '100%', height: 220 }}>
+    <div style={{ width: '100%', height: 210 }}>
       <ResponsiveContainer>
         <PieChart>
           <Pie data={data} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={48} outerRadius={80} paddingAngle={4}>
@@ -25,17 +30,29 @@ const CostBreakdownChart: React.FC = () => (
               <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
             ))}
           </Pie>
-          <Tooltip wrapperStyle={{ background: 'rgba(2,6,23,0.9)', borderRadius: 6, border: 'none' }} formatter={(v:number)=>[`$${v.toLocaleString()}`,'Cost']} />
+          <Tooltip
+            contentStyle={{
+              background: 'hsl(var(--popover))',
+              border: '1px solid hsl(var(--border))',
+              borderRadius: 0,
+              color: 'hsl(var(--popover-foreground))',
+              fontSize: 12,
+              padding: '8px 10px',
+            }}
+            labelStyle={{ color: '#F5F5F5' }}
+            itemStyle={{ color: '#D4D4D4' }}
+            formatter={(v: number) => [`$${v.toLocaleString()}`, 'Cost']}
+          />
         </PieChart>
       </ResponsiveContainer>
     </div>
-    <div className="mt-3 text-sm text-white/70">
+    <div className="mt-3 text-sm text-foreground">
       <div className="flex flex-col gap-2">
         {data.map((d,i)=>(
           <div key={d.name} className="flex items-center gap-3">
-            <span className="w-3 h-3 rounded-full" style={{background:COLORS[i]}} />
-            <div className="flex-1 text-sm text-white/90">{d.name}</div>
-            <div className="text-sm text-white/80">${d.value.toLocaleString()}</div>
+            <span aria-hidden="true" className="h-2.5 w-2.5 shrink-0" style={{background:COLORS[i]}} />
+            <div className="flex-1 text-sm font-medium text-neutral-300">{d.name}</div>
+            <div className="font-mono text-sm text-neutral-100">${d.value.toLocaleString()}</div>
           </div>
         ))}
       </div>

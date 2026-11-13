@@ -5,15 +5,23 @@ import { io } from 'socket.io-client';
 import {
   AlertTriangle,
   ArrowLeft,
+  Ban,
+  ChevronDown,
   Clock3,
   ExternalLink,
   GitBranch,
   Globe2,
   HardDriveDownload,
   Loader2,
+  Pause,
+  Play,
+  Power,
+  Trash2,
+  X,
 } from 'lucide-react';
-import { DashboardLayout } from '@/components/layout';
 import { deploymentService } from '@/services/auth-service';
+import { resolveDeploymentProvider } from '@/lib/application-types';
+import { SOCKET_URL } from '@/lib/constants';
 import LiveProgressBar from '@/components/deployments/LiveProgressBar';
 import TerminalStream from '@/components/deployments/TerminalStream';
 import DeploymentTimeline from '@/components/deployments/DeploymentTimeline';
@@ -120,6 +128,7 @@ type DeploymentDetails = {
   applicationType?: string;
   applicationName?: string;
   deploymentService?: string;
+  provider?: string;
   domainUrl?: string;
   healthStatus?: string;
   error?: {
@@ -171,15 +180,16 @@ const staticPhaseToStep: Record<string, number> = {
 };
 
 const statusStyles: Record<string, string> = {
-  success: 'bg-emerald-500/15 text-emerald-300 border-emerald-400/20',
-  deploying: 'bg-cyan-500/15 text-cyan-300 border-cyan-400/20',
-  running: 'bg-cyan-500/15 text-cyan-300 border-cyan-400/20',
-  building: 'bg-amber-500/15 text-amber-300 border-amber-400/20',
-  pushing: 'bg-amber-500/15 text-amber-300 border-amber-400/20',
-  pending: 'bg-white/6 text-white/60 border-white/10',
-  failed: 'bg-rose-500/15 text-rose-300 border-rose-400/20',
-  cancelled: 'bg-white/6 text-white/60 border-white/10',
-  stopped: 'bg-white/6 text-white/60 border-white/10',
+  success: 'bg-success/10 text-success border-success',
+  deploying: 'bg-primary/10 text-primary border-primary',
+  running: 'bg-primary/10 text-primary border-primary',
+  building: 'bg-warning/10 text-warning border-warning',
+  pushing: 'bg-warning/10 text-warning border-warning',
+  pending: 'bg-secondary text-muted-foreground border-border',
+  failed: 'bg-destructive/10 text-destructive border-destructive',
+  cancelled: 'bg-secondary text-muted-foreground border-border',
+  stopped: 'bg-secondary text-muted-foreground border-border',
+  closed: 'bg-secondary text-muted-foreground border-border',
 };
 
 const formatDate = (value?: string) => {
@@ -205,11 +215,19 @@ export default function DeploymentDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [bringingDown, setBringingDown] = useState(false);
   const [bringDownConfirmOpen, setBringDownConfirmOpen] = useState(false);
+  const [lifecycleBusy, setLifecycleBusy] = useState(false);
+  const [confirmLifecycleAction, setConfirmLifecycleAction] = useState<'cancel' | 'stop' | 'restart' | 'terminate' | null>(null);
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [showMetadata, setShowMetadata] = useState(false);
 
   const deploymentKey = deployment?._id || deployment?.deploymentId || '';
   const metadata = (deployment?.metadata || {}) as Record<string, any>;
   const infrastructure = (deployment?.infrastructure || metadata.infrastructure || {}) as NonNullable<DeploymentDetails['infrastructure']> & Record<string, any>;
-  const deploymentProvider = deployment?.deploymentService || infrastructure?.provider || 'aws';
+  const deploymentProvider = resolveDeploymentProvider({
+    deploymentService: deployment?.deploymentService,
+    provider: deployment?.provider,
+    infrastructure: { provider: infrastructure?.provider, targetType: infrastructure?.targetType },
+  });
   const targetType = infrastructure?.targetType || infrastructure?.target?.type || 'unknown';
   const commitHash = deployment?.commitShortHash || deployment?.commitHash || metadata?.repositoryInfo?.latestCommit?.shortHash || 'Unknown';
   const fullCommitHash = deployment?.commitHash || metadata?.repositoryInfo?.latestCommit?.hash || 'Unknown';
@@ -245,13 +263,11 @@ export default function DeploymentDetailPage() {
   const azureAciCpu = infrastructure?.aci?.cpu || 'Pending';
   const azureAciMemory = infrastructure?.aci?.memoryInGb || 'Pending';
   const isStaticDeployment =
-    deploymentProvider === 's3-static'
-    || infrastructure?.targetType === 's3-static'
+    deploymentProvider === 's3'
     || deployment?.applicationType === 'frontend-website';
   const isAwsDeployment =
-    !isStaticDeployment
-    && (deploymentProvider === 'aws' || infrastructure?.provider === 'aws' || infrastructure?.targetType === 'aws');
-  const isAzureDeployment = deploymentProvider === 'azure' || infrastructure?.provider === 'azure' || infrastructure?.targetType === 'azure';
+    !isStaticDeployment && deploymentProvider === 'aws';
+  const isAzureDeployment = !isStaticDeployment && deploymentProvider === 'azure';
   const activeSteps = isStaticDeployment ? STATIC_STEPS : DOCKER_STEPS;
   const activePhaseMap = isStaticDeployment ? staticPhaseToStep : phaseToStep;
   const s3Bucket = infrastructure?.s3?.bucket || 'Pending';
@@ -300,7 +316,7 @@ export default function DeploymentDetailPage() {
 
     void fetchDeployment();
     const timer = setInterval(() => {
-      const terminal = deployment?.status && ['success', 'failed', 'cancelled'].includes(deployment.status);
+      const terminal = deployment?.status && ['success', 'failed', 'cancelled', 'stopped', 'closed'].includes(deployment.status);
       if (!terminal) {
         void fetchDeployment();
       }
@@ -315,7 +331,7 @@ export default function DeploymentDetailPage() {
   useEffect(() => {
     if (!id) return;
 
-    const socketUrl = (import.meta.env.VITE_API_URL as string) || 'http://localhost:5000';
+    const socketUrl = SOCKET_URL;
     const socket = io(socketUrl, { autoConnect: true });
     const deploymentRoom = `deployment:${id}`;
 
@@ -406,10 +422,105 @@ export default function DeploymentDetailPage() {
     });
   }, [logs]);
 
-  const liveUrl = deployment?.publicUrl || deployment?.metadata?.liveUrl;
   const status = deployment?.status || 'pending';
+  const liveUrl = ['stopped', 'closed'].includes(status)
+    ? undefined
+    : deployment?.publicUrl || deployment?.metadata?.liveUrl;
   const badgeClass = statusStyles[status] || statusStyles.pending;
   const deploymentInstanceId = infrastructure?.ec2?.instanceId || (deployment?.metadata as any)?.ec2InstanceId || '';
+  const isCloudOpsContainer = !isStaticDeployment && !isAwsDeployment && !isAzureDeployment;
+  const canCancel = ['pending', 'queued', 'cloning', 'detecting', 'building', 'pushing', 'deploying'].includes(status);
+  const canStopContainer = ['success', 'running'].includes(status) && !isStaticDeployment;
+  const canRestartContainer = status === 'stopped' && !isStaticDeployment;
+  const canTerminateAws = isAwsDeployment && ['success', 'running', 'stopped', 'failed', 'cancelled'].includes(status) && Boolean(deploymentInstanceId);
+  const canTerminateAzure = isAzureDeployment && ['success', 'running', 'stopped', 'failed', 'cancelled'].includes(status);
+  const canTerminateGeneric = !isAzureDeployment && !isAwsDeployment && ['success', 'running', 'stopped', 'failed', 'cancelled'].includes(status);
+
+  const focusSection = (sectionId: string, requiresMetadata = false) => {
+    if (requiresMetadata) setShowMetadata(true);
+    window.setTimeout(() => {
+      document.getElementById(sectionId)?.scrollIntoView({
+        behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+        block: 'start',
+      });
+    }, 0);
+  };
+
+  const runLifecycleAction = async (action: 'cancel' | 'stop' | 'restart' | 'terminate') => {
+    if (!deploymentKey) return;
+    setLifecycleBusy(true);
+    setError(null);
+    setActionMessage(null);
+
+    try {
+      if (action === 'cancel') {
+        await deploymentService.cancel(deploymentKey);
+        setDeployment((current) => current ? { ...current, status: 'cancelled', phase: 'complete' } : current);
+        setActionMessage('Deployment cancelled.');
+      } else if (action === 'stop') {
+        await deploymentService.stop(deploymentKey);
+        setDeployment((current) => current
+          ? {
+              ...current,
+              status: 'stopped',
+              infrastructure: {
+                ...current.infrastructure,
+                aci: {
+                  ...current.infrastructure?.aci,
+                  status: 'stopped',
+                },
+              },
+              metadata: { ...current.metadata, containerStatus: 'stopped' },
+            }
+          : current);
+        setActionMessage(isAzureDeployment ? 'Azure container suspended. Compute billing paused.' : 'Deployment stopped. Its configuration and image are retained.');
+      } else if (action === 'restart') {
+        await (isAzureDeployment ? deploymentService.start(deploymentKey) : deploymentService.restart(deploymentKey));
+        setDeployment((current) => current
+          ? {
+              ...current,
+              status: 'running',
+              infrastructure: {
+                ...current.infrastructure,
+                aci: {
+                  ...current.infrastructure?.aci,
+                  status: 'running',
+                },
+              },
+              metadata: { ...current.metadata, containerStatus: 'running' },
+            }
+          : current);
+        setActionMessage(isAzureDeployment ? 'Azure container resumed and running.' : 'Deployment restarted.');
+      } else if (action === 'terminate') {
+        if (isAzureDeployment) {
+          await deploymentService.terminateAzureDeployment(deploymentKey);
+        } else {
+          await deploymentService.delete(deploymentKey);
+        }
+        setDeployment((current) => current
+          ? {
+              ...current,
+              status: 'closed',
+              phase: 'complete',
+              publicUrl: undefined,
+              infrastructure: {
+                ...current.infrastructure,
+                aci: {
+                  ...current.infrastructure?.aci,
+                  status: 'deleted',
+                },
+              },
+            }
+          : current);
+        setActionMessage(isAzureDeployment ? 'Azure Container Group terminated and removed.' : 'Deployment terminated and closed.');
+      }
+    } catch (actionError: any) {
+      setError(actionError?.response?.data?.error || actionError?.message || `Unable to ${action} deployment.`);
+    } finally {
+      setLifecycleBusy(false);
+      setConfirmLifecycleAction(null);
+    }
+  };
 
   const handleBringDown = async () => {
     if (!deploymentInstanceId) {
@@ -439,9 +550,12 @@ export default function DeploymentDetailPage() {
               status: 'closed',
               phase: 'complete',
               publicUrl: undefined,
+              domainUrl: undefined,
+              metadata: { ...current.metadata, liveUrl: undefined },
             }
           : current
       );
+      setActionMessage('AWS resources terminated and the deployment was closed.');
     } catch (err: any) {
       console.error('Bring down error:', err);
       setError(err?.response?.data?.error || err?.message || 'Failed to bring down deployment');
@@ -451,45 +565,77 @@ export default function DeploymentDetailPage() {
   };
 
   return (
-    <DashboardLayout>
-      <main className="space-y-8">
+    <>
+      <main className="min-h-screen bg-[#070707] py-6">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <button
             type="button"
             onClick={() => navigate('/deployments')}
-            className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/80 transition hover:bg-white/10"
+            className="inline-flex items-center gap-2 border border-white/10 bg-[#101010] px-3 py-2 text-xs font-medium text-neutral-300 transition hover:border-white/25 hover:text-white"
           >
             <ArrowLeft className="h-4 w-4" />
             Back to deployments
           </button>
 
           {error && (
-            <div className="mt-4 flex items-start gap-3 rounded-2xl border border-rose-400/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
+            <div className="mt-4 flex items-start gap-3 border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
               <span>{error}</span>
             </div>
           )}
 
+          {actionMessage && (
+            <div role="status" className="mt-4 border border-emerald-400/30 bg-emerald-400/[0.05] px-4 py-3 text-sm text-emerald-300">
+              {actionMessage}
+            </div>
+          )}
+
+          {deployment && (
+            <nav aria-label="Deployment sections" className="mt-4 flex min-w-0 overflow-x-auto border border-white/10 bg-[#0C0C0C]">
+              {[
+                { label: 'Overview', id: 'deployment-overview' },
+                { label: 'Progress', id: 'deployment-progress' },
+                { label: 'Logs', id: 'deployment-logs' },
+                { label: 'Source & build', id: 'deployment-source', metadata: true },
+                { label: 'Infrastructure', id: 'deployment-infrastructure', metadata: true },
+              ].map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => focusSection(item.id, item.metadata)}
+                  className="shrink-0 border-r border-white/[0.07] px-3 py-3 text-xs font-medium text-neutral-500 transition hover:bg-white/[0.03] hover:text-white sm:px-4"
+                >
+                  {item.label}
+                </button>
+              ))}
+            </nav>
+          )}
+
           {loading && !deployment ? (
-            <div className="mt-8 grid gap-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
-              <div className="h-[560px] animate-pulse rounded-3xl border border-white/10 bg-white/5" />
-              <div className="h-[560px] animate-pulse rounded-3xl border border-white/10 bg-white/5" />
+            <div className="mt-8 space-y-4">
+              <div className="h-48 animate-pulse border border-white/10 bg-[#101010]" />
+              <div className="h-[420px] animate-pulse border border-white/10 bg-[#0C0C0C]" />
             </div>
           ) : deployment ? (
-            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
-              <div className="min-w-0 space-y-6">
-                <div className="min-w-0 rounded-3xl border border-white/10 bg-[rgba(8,12,20,0.78)] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.28)]">
-                  <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="mt-5 space-y-4">
+              <div className="min-w-0 space-y-4">
+                <div id="deployment-overview" className="min-w-0 scroll-mt-20 border border-white/10 bg-[#0C0C0C] p-4 sm:p-5">
+                  <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                     <div>
-                      <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs uppercase tracking-[0.24em] text-white/55">
-                        <HardDriveDownload className="h-3.5 w-3.5" />
-                        Deployment details
+                      <div className="flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-neutral-500">
+                        <HardDriveDownload className="h-3.5 w-3.5 text-emerald-400" />
+                        {deploymentProvider} deployment
+                        <span className="text-neutral-700">/</span>
+                        <span className="font-mono tracking-normal">{deploymentKey.slice(-8)}</span>
                       </div>
-                      <h1 className="mt-4 text-3xl font-semibold text-white">
+                      <h1 className="mt-2 text-2xl font-semibold tracking-tight text-white sm:text-3xl">
                         {deployment.repositoryName || 'Deployment'}
                       </h1>
-                      <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-white/60">
-                        <span className={`rounded-full border px-3 py-1 text-xs font-medium capitalize ${badgeClass}`}>{status}</span>
+                      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-neutral-400">
+                        <span className={`inline-flex items-center gap-1.5 border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider ${badgeClass}`}>
+                          <span className={`h-1.5 w-1.5 ${status === 'success' ? 'bg-emerald-400' : status === 'failed' ? 'bg-destructive' : 'bg-amber-300'}`} />
+                          {status}
+                        </span>
                         <span className="inline-flex items-center gap-1.5">
                           <GitBranch className="h-4 w-4" />
                           {deployment.branch || 'main'}
@@ -501,105 +647,165 @@ export default function DeploymentDetailPage() {
                       </div>
                     </div>
 
-                    {liveUrl ? (
-                      <a
-                        href={liveUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-2 rounded-2xl border border-cyan-400/20 bg-cyan-500/10 px-4 py-3 text-sm font-medium text-cyan-200 transition hover:bg-cyan-500/15"
-                      >
-                        <Globe2 className="h-4 w-4" />
-                        Open live URL
-                        <ExternalLink className="h-4 w-4" />
-                      </a>
-                    ) : (
-                      <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/55">
-                        Live URL will appear after the deployment finishes.
-                      </div>
-                    )}
-                    {isAwsDeployment && deployment.status === 'success' && (
-                      <div className="mt-3 space-y-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {liveUrl ? (
+                        <a
+                          href={liveUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-2 border border-emerald-400/40 bg-emerald-400/[0.08] px-4 py-3 text-sm font-medium text-emerald-300 transition hover:bg-emerald-400/[0.14]"
+                        >
+                          <Globe2 className="h-4 w-4" />
+                          Open live site
+                          <ExternalLink className="h-4 w-4" />
+                        </a>
+                      ) : (
+                        <div className="border border-white/10 bg-[#101010] px-4 py-3 text-xs text-neutral-500">
+                          Live URL pending
+                        </div>
+                      )}
+                      {canCancel && (
+                        <button
+                          type="button"
+                          disabled={lifecycleBusy}
+                          onClick={() => setConfirmLifecycleAction('cancel')}
+                          className="inline-flex items-center gap-2 border border-amber-400/40 bg-amber-400/10 px-3.5 py-2 text-xs font-medium text-amber-300 transition hover:bg-amber-400/20 disabled:opacity-50"
+                        >
+                          {lifecycleBusy && confirmLifecycleAction === 'cancel' ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Ban className="h-3.5 w-3.5" />
+                          )}
+                          Cancel deployment
+                        </button>
+                      )}
+
+                      {canStopContainer && (
+                        <button
+                          type="button"
+                          disabled={lifecycleBusy}
+                          onClick={() => setConfirmLifecycleAction('stop')}
+                          className="inline-flex items-center gap-2 border border-amber-400/30 bg-[#141414] px-3.5 py-2 text-xs font-medium text-amber-300 transition hover:bg-amber-400/10 disabled:opacity-50"
+                        >
+                          {lifecycleBusy && confirmLifecycleAction === 'stop' ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Pause className="h-3.5 w-3.5" />
+                          )}
+                          {isAzureDeployment ? 'Pause compute ($0/hr)' : 'Stop container'}
+                        </button>
+                      )}
+
+                      {canRestartContainer && (
+                        <button
+                          type="button"
+                          disabled={lifecycleBusy}
+                          onClick={() => setConfirmLifecycleAction('restart')}
+                          className="inline-flex items-center gap-2 border border-emerald-400/40 bg-emerald-400/10 px-3.5 py-2 text-xs font-medium text-emerald-300 transition hover:bg-emerald-400/20 disabled:opacity-50"
+                        >
+                          {lifecycleBusy && confirmLifecycleAction === 'restart' ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Play className="h-3.5 w-3.5" />
+                          )}
+                          {isAzureDeployment ? 'Resume container' : 'Restart container'}
+                        </button>
+                      )}
+
+                      {(canTerminateAzure || canTerminateGeneric) && (
+                        <button
+                          type="button"
+                          disabled={lifecycleBusy}
+                          onClick={() => setConfirmLifecycleAction('terminate')}
+                          className="inline-flex items-center gap-2 border border-destructive/40 bg-destructive/10 px-3.5 py-2 text-xs font-medium text-destructive transition hover:bg-destructive/20 disabled:opacity-50"
+                        >
+                          {lifecycleBusy && confirmLifecycleAction === 'terminate' ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-3.5 w-3.5" />
+                          )}
+                          {isAzureDeployment ? 'Terminate Azure' : 'Terminate'}
+                        </button>
+                      )}
+
+                      {canTerminateAws && (
                         <button
                           type="button"
                           disabled={bringingDown}
                           onClick={() => setBringDownConfirmOpen(true)}
-                          className="ml-3 inline-flex items-center gap-2 rounded-2xl border border-rose-400/20 bg-rose-500/10 px-4 py-3 text-sm font-medium text-rose-200 transition hover:bg-rose-500/15"
+                          className="inline-flex items-center gap-2 border border-destructive/40 bg-destructive/10 px-3.5 py-2 text-xs font-medium text-destructive transition hover:bg-destructive/20 disabled:opacity-50"
                         >
-                          {bringingDown ? 'Bringing down…' : 'Bring Down'}
+                          {bringingDown ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Power className="h-3.5 w-3.5" />
+                          )}
+                          Terminate AWS
                         </button>
-                        {bringDownConfirmOpen && !bringingDown && (
-                          <div className="rounded-2xl border border-rose-400/20 bg-rose-500/10 p-4 text-sm text-rose-100">
-                            <div className="font-medium">Terminate the EC2 instance and clean up the ECR repository?</div>
-                            <div className="mt-3 flex flex-wrap gap-3">
-                              <button
-                                type="button"
-                                onClick={() => void handleBringDown()}
-                                className="rounded-xl bg-rose-500 px-4 py-2 font-medium text-white transition hover:bg-rose-400"
-                              >
-                                Confirm bring down
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setBringDownConfirmOpen(false)}
-                                className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 font-medium text-white/80 transition hover:bg-white/10"
-                              >
-                                Cancel
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    {isAzureDeployment && deployment.status === 'success' && (
-                      <div className="mt-3 rounded-2xl border border-cyan-400/20 bg-cyan-500/10 p-4 text-sm text-cyan-100">
-                        Azure deployments are managed through ACI/ACR. Use the Azure Portal to terminate resources.
-                      </div>
-                    )}
+                      )}
+                  </div>
                   </div>
 
-                  <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  <div className="mt-5 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
                     {[
-                      { label: 'Deployment ID', value: deploymentKey },
                       { label: 'Application', value: deployment.applicationName || deployment.repositoryName || 'Unknown' },
-                      { label: 'Application type', value: deployment.applicationType || 'Not set' },
-                      { label: 'Project ID', value: deployment.projectId || 'Not linked' },
-                      { label: 'Framework', value: deployment.framework || 'auto-detected' },
-                      { label: 'Health', value: deployment.healthStatus || 'unknown' },
-                      { label: 'Started at', value: formatDate(deployment.startedAt || deployment.createdAt) },
-                      { label: 'Completed at', value: formatDate(deployment.completedAt) },
-                      { label: 'Phase', value: deployment.phase || 'preparation' },
-                      { label: 'Live URL', value: deployment.domainUrl || liveInfrastructureUrl || 'Pending' },
+                      { label: 'Runtime', value: deployment.framework || metadata?.framework || 'Auto-detected' },
+                      { label: 'Health', value: deployment.healthStatus || 'Unknown' },
+                      { label: 'Region', value: infrastructure?.region || azureAciLocation || metadata?.target?.awsRegion || 'Managed' },
                     ].map((item) => (
-                      <div key={item.label} className="min-w-0 rounded-2xl border border-white/8 bg-white/4 px-4 py-3">
-                        <div className="text-[11px] uppercase tracking-[0.22em] text-white/40">{item.label}</div>
-                        <div className="mt-2 break-words text-sm font-medium text-white">{item.value}</div>
+                      <div key={item.label} className="min-w-0 border border-white/[0.07] bg-[#101010] px-3 py-2.5">
+                        <div className="text-[9px] font-medium uppercase tracking-[0.16em] text-neutral-600">{item.label}</div>
+                        <div className="mt-1 truncate text-xs font-medium text-neutral-200">{item.value}</div>
                       </div>
                     ))}
                   </div>
                 </div>
 
-                <div className="min-w-0 rounded-3xl border border-white/10 bg-[rgba(8,12,20,0.78)] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.28)]">
-                  <h2 className="text-lg font-semibold text-white">Progress</h2>
+                {deployment.error?.message && (
+                  <div className="flex items-start gap-3 border border-destructive/40 bg-destructive/[0.06] p-4 text-sm text-destructive">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                    <div>
+                      <div className="font-semibold">Deployment failed</div>
+                      <p className="mt-1 text-xs leading-5">{deployment.error.message}</p>
+                    </div>
+                  </div>
+                )}
+
+                <div id="deployment-progress" className="min-w-0 scroll-mt-20 border border-white/10 bg-[#0C0C0C] p-4 sm:p-5">
+                  <h2 className="text-sm font-semibold text-white">Build progress</h2>
                   <div className="mt-4">
                     <LiveProgressBar steps={activeSteps} current={currentStep} progress={progress} />
                   </div>
-                  <div className="mt-6">
-                    <DeploymentTimeline steps={timeline as any} />
-                  </div>
+                  <details className="mt-4 border-t border-white/[0.07] pt-3">
+                    <summary className="cursor-pointer text-xs font-medium text-neutral-500 transition hover:text-neutral-200">
+                      View all deployment steps
+                    </summary>
+                    <div className="mt-4">
+                      <DeploymentTimeline steps={timeline as any} />
+                    </div>
+                  </details>
                 </div>
 
-                <div className="min-w-0 rounded-3xl border border-white/10 bg-[rgba(8,12,20,0.78)] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.28)]">
-                  <h2 className="text-lg font-semibold text-white">Deployment logs</h2>
-                  <div className="mt-4">
+                <div id="deployment-logs" className="min-w-0 scroll-mt-20 border border-white/10 bg-[#0C0C0C] p-4 sm:p-5">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <h2 className="text-sm font-semibold text-white">Build logs</h2>
+                      <p className="mt-1 text-[11px] text-neutral-500">Live output from this deployment</p>
+                    </div>
+                    <span className="font-mono text-[10px] uppercase tracking-wider text-neutral-600">
+                      {logs.length} {logs.length === 1 ? 'entry' : 'entries'}
+                    </span>
+                  </div>
+                  <div className="mt-3">
                     {loading ? (
-                      <div className="flex items-center gap-2 text-sm text-white/60">
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <Loader2 className="h-4 w-4 animate-spin" />
                         Loading logs...
                       </div>
                     ) : renderedLogs.length > 0 ? (
                       <TerminalStream logs={renderedLogs} />
                     ) : (
-                      <div className="rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white/60">
+                      <div className="border border-white/10 bg-[#101010] px-4 py-3 text-sm text-neutral-500">
                         {deployment.status === 'building' || deployment.status === 'deploying'
                           ? 'Waiting for deployment logs...'
                           : deployment.error?.message || 'No logs recorded for this deployment.'}
@@ -609,9 +815,15 @@ export default function DeploymentDetailPage() {
                 </div>
               </div>
 
-              <div className="min-w-0 space-y-6">
-                <div className="min-w-0 rounded-3xl border border-white/10 bg-[rgba(8,12,20,0.78)] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.28)]">
-                  <h2 className="text-lg font-semibold text-white">Project info</h2>
+              <details open={showMetadata} onToggle={(event) => setShowMetadata(event.currentTarget.open)} className="group scroll-mt-20 border border-white/10 bg-[#0C0C0C]">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-4 text-sm font-medium text-neutral-300 transition hover:text-white sm:px-5">
+                  <span>Repository, build and infrastructure details</span>
+                  <span className="text-[10px] uppercase tracking-wider text-neutral-600 group-open:hidden">Show</span>
+                  <span className="hidden text-[10px] uppercase tracking-wider text-neutral-600 group-open:inline">Hide</span>
+                </summary>
+                <div className="space-y-4 border-t border-white/[0.07] p-4 sm:p-5">
+                <div id="deployment-source" className="min-w-0 scroll-mt-20 border border-white/[0.07] bg-[#0A0A0A] p-4">
+                  <h2 className="text-sm font-semibold text-neutral-200">Project info</h2>
                   <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
                     {[
                       { label: 'Repository name', value: deployment.repositoryName || 'Unknown' },
@@ -620,16 +832,16 @@ export default function DeploymentDetailPage() {
                       { label: 'User ID', value: deployment.userId || 'Unknown' },
                       { label: 'Project ID', value: deployment.projectId || 'Not linked' },
                     ].map((item) => (
-                      <div key={item.label} className="min-w-0 rounded-2xl border border-white/8 bg-white/4 px-4 py-3">
-                        <div className="text-[11px] uppercase tracking-[0.22em] text-white/40">{item.label}</div>
-                        <div className="mt-2 break-words text-sm text-white">{item.value}</div>
+                      <div key={item.label} className="min-w-0 border border-border bg-secondary px-4 py-3">
+                        <div className="text-[11px] uppercase tracking-[0.22em] text-foreground/40">{item.label}</div>
+                        <div className="mt-2 break-words text-sm text-foreground">{item.value}</div>
                       </div>
                     ))}
                   </div>
                 </div>
 
-                <div className="min-w-0 rounded-3xl border border-white/10 bg-[rgba(8,12,20,0.78)] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.28)]">
-                  <h2 className="text-lg font-semibold text-white">Source and build</h2>
+                <div id="deployment-infrastructure" className="min-w-0 scroll-mt-20 border border-white/[0.07] bg-[#0A0A0A] p-4">
+                  <h2 className="text-sm font-semibold text-neutral-200">Source and build</h2>
                   <div className="mt-4 grid gap-3 sm:grid-cols-2">
                     {[
                       { label: 'Last commit', value: `${commitHash} ${fullCommitHash !== commitHash ? `(${fullCommitHash})` : ''}`.trim() },
@@ -642,16 +854,66 @@ export default function DeploymentDetailPage() {
                       { label: 'Docker build time', value: dockerBuildTime ? formatDuration(dockerBuildTime) : 'Pending' },
                       { label: 'Docker image size', value: dockerImageSize ? `${(dockerImageSize / (1024 * 1024)).toFixed(2)} MB` : 'Pending' },
                     ].map((item) => (
-                      <div key={item.label} className="min-w-0 rounded-2xl border border-white/8 bg-white/4 px-4 py-3">
-                        <div className="text-[11px] uppercase tracking-[0.22em] text-white/40">{item.label}</div>
-                        <div className="mt-2 break-all text-sm font-medium text-white">{item.value}</div>
+                      <div key={item.label} className="min-w-0 border border-border bg-secondary px-4 py-3">
+                        <div className="text-[11px] uppercase tracking-[0.22em] text-foreground/40">{item.label}</div>
+                        <div className="mt-2 break-all text-sm font-medium text-foreground">{item.value}</div>
                       </div>
                     ))}
                   </div>
                 </div>
 
-                <div className="min-w-0 rounded-3xl border border-white/10 bg-[rgba(8,12,20,0.78)] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.28)]">
-                  <h2 className="text-lg font-semibold text-white mb-4">Infrastructure Details</h2>
+                <div className="min-w-0 border border-white/[0.07] bg-[#0A0A0A] p-4">
+                  <h2 className="mb-4 text-sm font-semibold text-neutral-200">Infrastructure details</h2>
+                  {isAzureDeployment && (
+                    <div className="mb-5 border border-primary/20 bg-primary/[0.04] p-3 text-xs">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <span className={`h-2 w-2 rounded-full ${['running', 'success'].includes(status) ? 'bg-emerald-400' : status === 'stopped' ? 'bg-amber-400' : 'bg-neutral-500'}`} />
+                          <span className="font-medium text-neutral-200">
+                            {status === 'stopped' ? 'Azure Container Group is Suspended' : status === 'closed' ? 'Azure Container Group is Terminated' : 'Azure Container Group is Active'}
+                          </span>
+                          <span className="text-neutral-400">
+                            {status === 'stopped' ? '(Compute billing paused: $0/hr)' : status === 'closed' ? '(Resources deleted)' : '(Billed per second of compute)'}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {canStopContainer && (
+                            <button
+                              type="button"
+                              disabled={lifecycleBusy}
+                              onClick={() => setConfirmLifecycleAction('stop')}
+                              className="inline-flex items-center gap-1 border border-amber-400/30 bg-amber-400/10 px-2.5 py-1 text-[11px] font-medium text-amber-300 transition hover:bg-amber-400/20 disabled:opacity-50"
+                            >
+                              <Pause className="h-3 w-3" />
+                              Pause compute
+                            </button>
+                          )}
+                          {canRestartContainer && (
+                            <button
+                              type="button"
+                              disabled={lifecycleBusy}
+                              onClick={() => setConfirmLifecycleAction('restart')}
+                              className="inline-flex items-center gap-1 border border-emerald-400/30 bg-emerald-400/10 px-2.5 py-1 text-[11px] font-medium text-emerald-300 transition hover:bg-emerald-400/20 disabled:opacity-50"
+                            >
+                              <Play className="h-3 w-3" />
+                              Resume container
+                            </button>
+                          )}
+                          {canTerminateAzure && (
+                            <button
+                              type="button"
+                              disabled={lifecycleBusy}
+                              onClick={() => setConfirmLifecycleAction('terminate')}
+                              className="inline-flex items-center gap-1 border border-destructive/40 bg-destructive/10 px-2.5 py-1 text-[11px] font-medium text-destructive transition hover:bg-destructive/20 disabled:opacity-50"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                              Terminate
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   
                   {/* AWS EC2 Deployment */}
                   {isAwsDeployment && !isStaticDeployment && (
@@ -669,7 +931,7 @@ export default function DeploymentDetailPage() {
                             { label: 'VPC ID', value: infrastructure?.ec2?.vpcId || 'Pending' },
                             { label: 'Security Groups', value: (infrastructure?.ec2?.securityGroupIds || []).join(', ') || 'Pending' },
                           ].map((item) => (
-                            <div key={item.label} className="min-w-0 rounded-2xl border border-orange-400/10 bg-orange-500/5 px-4 py-3">
+                            <div key={item.label} className="min-w-0 border border-orange-400/10 bg-orange-500/5 px-4 py-3">
                               <div className="text-[11px] uppercase tracking-[0.22em] text-orange-400/60">{item.label}</div>
                               <div className="mt-2 break-all text-sm font-medium text-orange-200">{item.value}</div>
                             </div>
@@ -677,8 +939,8 @@ export default function DeploymentDetailPage() {
                         </div>
                       </div>
 
-                      <div className="border-l-2 border-amber-400/30 pl-4">
-                        <h3 className="text-sm font-semibold text-amber-400 mb-3">ECR (Docker Registry)</h3>
+                      <div className="border-l-2 border-warning pl-4">
+                        <h3 className="text-sm font-semibold text-warning mb-3">ECR (Docker Registry)</h3>
                         <div className="grid gap-3 sm:grid-cols-2">
                           {[
                             { label: 'Repository Name', value: ecrRepository },
@@ -688,9 +950,9 @@ export default function DeploymentDetailPage() {
                             { label: 'Build Time', value: dockerBuildTime ? formatDuration(dockerBuildTime) : 'Pending' },
                             { label: 'Image Size', value: dockerImageSize ? `${(dockerImageSize / (1024 * 1024)).toFixed(2)} MB` : 'Pending' },
                           ].map((item) => (
-                            <div key={item.label} className="min-w-0 rounded-2xl border border-amber-400/10 bg-amber-500/5 px-4 py-3">
-                              <div className="text-[11px] uppercase tracking-[0.22em] text-amber-400/60">{item.label}</div>
-                              <div className="mt-2 break-all text-sm font-medium text-amber-200">{item.value}</div>
+                            <div key={item.label} className="min-w-0 border border-warning bg-warning/10 px-4 py-3">
+                              <div className="text-[11px] uppercase tracking-[0.22em] text-warning">{item.label}</div>
+                              <div className="mt-2 break-all text-sm font-medium text-warning">{item.value}</div>
                             </div>
                           ))}
                         </div>
@@ -700,8 +962,8 @@ export default function DeploymentDetailPage() {
 
                   {/* S3 Static Deployment */}
                   {isStaticDeployment && (
-                    <div className="border-l-2 border-emerald-400/30 pl-4">
-                      <h3 className="text-sm font-semibold text-emerald-400 mb-3">S3 Static Hosting</h3>
+                    <div className="border-l-2 border-success pl-4">
+                      <h3 className="text-sm font-semibold text-success mb-3">S3 Static Hosting</h3>
                       <div className="grid gap-3 sm:grid-cols-2">
                         {[
                           { label: 'Region', value: infrastructure?.region || 'Pending' },
@@ -711,9 +973,9 @@ export default function DeploymentDetailPage() {
                           { label: 'Public IP', value: deploymentPublicIp },
                           { label: 'Live URL', value: deployment.domainUrl || liveInfrastructureUrl || 'Pending' },
                         ].map((item) => (
-                          <div key={item.label} className="min-w-0 rounded-2xl border border-emerald-400/10 bg-emerald-500/5 px-4 py-3">
-                            <div className="text-[11px] uppercase tracking-[0.22em] text-emerald-400/60">{item.label}</div>
-                            <div className="mt-2 break-all text-sm font-medium text-emerald-200">{item.value}</div>
+                          <div key={item.label} className="min-w-0 border border-success bg-success/10 px-4 py-3">
+                            <div className="text-[11px] uppercase tracking-[0.22em] text-success">{item.label}</div>
+                            <div className="mt-2 break-all text-sm font-medium text-success">{item.value}</div>
                           </div>
                         ))}
                       </div>
@@ -734,7 +996,7 @@ export default function DeploymentDetailPage() {
                             { label: 'Build Time', value: dockerBuildTime ? formatDuration(dockerBuildTime) : 'Pending' },
                             { label: 'Image Size', value: dockerImageSize ? `${(dockerImageSize / (1024 * 1024)).toFixed(2)} MB` : 'Pending' },
                           ].map((item) => (
-                            <div key={item.label} className="min-w-0 rounded-2xl border border-sky-400/10 bg-sky-500/5 px-4 py-3">
+                            <div key={item.label} className="min-w-0 border border-border bg-secondary px-4 py-3">
                               <div className="text-[11px] uppercase tracking-[0.22em] text-sky-400/60">{item.label}</div>
                               <div className="mt-2 break-all text-sm font-medium text-sky-200">{item.value}</div>
                             </div>
@@ -742,8 +1004,8 @@ export default function DeploymentDetailPage() {
                         </div>
                       </div>
 
-                      <div className="border-l-2 border-cyan-400/30 pl-4">
-                        <h3 className="text-sm font-semibold text-cyan-400 mb-3">Azure Container Instances (ACI)</h3>
+                      <div className="border-l-2 border-primary pl-4">
+                        <h3 className="text-sm font-semibold text-primary mb-3">Azure Container Instances (ACI)</h3>
                         <div className="grid gap-3 sm:grid-cols-2">
                           {[
                             { label: 'Resource Group', value: azureAciResourceGroup },
@@ -755,9 +1017,9 @@ export default function DeploymentDetailPage() {
                             { label: 'FQDN / IP', value: azureAciFqdn },
                             { label: 'Status', value: azureAciStatus },
                           ].map((item) => (
-                            <div key={item.label} className="min-w-0 rounded-2xl border border-cyan-400/10 bg-cyan-500/5 px-4 py-3">
-                              <div className="text-[11px] uppercase tracking-[0.22em] text-cyan-400/60">{item.label}</div>
-                              <div className="mt-2 break-all text-sm font-medium text-cyan-200">{item.value}</div>
+                            <div key={item.label} className="min-w-0 border border-primary bg-primary/10 px-4 py-3">
+                              <div className="text-[11px] uppercase tracking-[0.22em] text-primary">{item.label}</div>
+                              <div className="mt-2 break-all text-sm font-medium text-primary">{item.value}</div>
                             </div>
                           ))}
                         </div>
@@ -766,8 +1028,8 @@ export default function DeploymentDetailPage() {
                   )}
 
                   {/* Common Info */}
-                  <div className="mt-6 border-t border-white/10 pt-6">
-                    <h3 className="text-sm font-semibold text-white/80 mb-3">General</h3>
+                  <div className="mt-6 border-t border-border pt-6">
+                    <h3 className="text-sm font-semibold text-foreground mb-3">General</h3>
                     <div className="grid gap-3 sm:grid-cols-2">
                       {[
                         { label: 'Provider', value: deploymentProvider.toUpperCase() },
@@ -776,33 +1038,172 @@ export default function DeploymentDetailPage() {
                         { label: 'Live URL', value: deployment.domainUrl || liveInfrastructureUrl || 'Pending' },
                         { label: 'Deploy State', value: infrastructure?.deployState || 'Pending' },
                       ].map((item) => (
-                        <div key={item.label} className="min-w-0 rounded-2xl border border-white/8 bg-white/4 px-4 py-3">
-                          <div className="text-[11px] uppercase tracking-[0.22em] text-white/40">{item.label}</div>
-                          <div className="mt-2 break-all text-sm font-medium text-white">{item.value}</div>
+                        <div key={item.label} className="min-w-0 border border-border bg-secondary px-4 py-3">
+                          <div className="text-[11px] uppercase tracking-[0.22em] text-foreground/40">{item.label}</div>
+                          <div className="mt-2 break-all text-sm font-medium text-foreground">{item.value}</div>
                         </div>
                       ))}
                     </div>
                   </div>
                 </div>
 
-                {deployment.error?.message && (
-                  <div className="min-w-0 rounded-3xl border border-rose-400/20 bg-rose-500/10 p-5 shadow-[0_24px_70px_rgba(0,0,0,0.28)]">
-                    <div className="flex items-center gap-2 text-rose-200">
-                      <AlertTriangle className="h-5 w-5" />
-                      <h2 className="text-lg font-semibold">Failure details</h2>
-                    </div>
-                    <p className="mt-3 text-sm text-rose-100/85">{deployment.error.message}</p>
-                  </div>
-                )}
-              </div>
+                </div>
+              </details>
             </motion.div>
           ) : (
-            <div className="mt-8 rounded-3xl border border-white/10 bg-[rgba(8,12,20,0.78)] p-10 text-center text-white/60">
+            <div className="mt-8 border border-border bg-card p-10 text-center text-muted-foreground">
               Deployment not found.
             </div>
           )}
         </div>
+
+        {/* Lifecycle Action Modal */}
+        {confirmLifecycleAction && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div
+              className="absolute inset-0 bg-black/75 backdrop-blur-sm"
+              onClick={() => !lifecycleBusy && setConfirmLifecycleAction(null)}
+            />
+            <div className="relative z-10 w-full max-w-md rounded-2xl border border-white/10 bg-[#0E0E0E] p-6 shadow-2xl">
+              <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                <h3 className="text-base font-semibold text-white">
+                  {confirmLifecycleAction === 'cancel'
+                    ? 'Cancel Deployment'
+                    : confirmLifecycleAction === 'stop'
+                      ? (isAzureDeployment ? 'Pause Compute (Suspend Billing)' : 'Stop Container')
+                      : confirmLifecycleAction === 'restart'
+                        ? (isAzureDeployment ? 'Resume Container' : 'Restart Container')
+                        : 'Terminate Deployment & Resources'}
+                </h3>
+                <button
+                  type="button"
+                  disabled={lifecycleBusy}
+                  onClick={() => setConfirmLifecycleAction(null)}
+                  className="text-neutral-400 hover:text-white"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="mt-4 text-xs leading-relaxed text-neutral-300">
+                {confirmLifecycleAction === 'cancel' && (
+                  <p>
+                    Are you sure you want to cancel this deployment? Any active build, push, or container provisioning jobs will be aborted immediately.
+                  </p>
+                )}
+                {confirmLifecycleAction === 'stop' && (
+                  <p>
+                    {isAzureDeployment
+                      ? 'Suspending this Azure Container Group stops compute billing ($0/hr). Your Docker image in ACR and configuration are retained so you can resume anytime.'
+                      : 'Stopping this container will halt execution while preserving the deployment record and build artifact.'}
+                  </p>
+                )}
+                {confirmLifecycleAction === 'restart' && (
+                  <p>
+                    {isAzureDeployment
+                      ? 'Resume this suspended Azure container? Compute will begin running again and your application will be reachable at its public URL.'
+                      : 'Restart this container to resume running the application.'}
+                  </p>
+                )}
+                {confirmLifecycleAction === 'terminate' && (
+                  <div className="space-y-2">
+                    <p className="font-semibold text-destructive">
+                      This action is permanent and cannot be undone.
+                    </p>
+                    <p>
+                      {isAzureDeployment
+                        ? 'This will permanently delete the Azure Container Group from your Azure subscription. Any ephemeral container state will be lost.'
+                        : 'This will permanently terminate and delete this deployment resource.'}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-6 flex justify-end gap-3 border-t border-white/10 pt-4">
+                <button
+                  type="button"
+                  disabled={lifecycleBusy}
+                  onClick={() => setConfirmLifecycleAction(null)}
+                  className="border border-white/10 bg-[#161616] px-4 py-2 text-xs font-medium text-neutral-300 hover:text-white"
+                >
+                  Keep as is
+                </button>
+                <button
+                  type="button"
+                  disabled={lifecycleBusy}
+                  onClick={() => void runLifecycleAction(confirmLifecycleAction)}
+                  className={`inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium disabled:opacity-50 ${
+                    confirmLifecycleAction === 'terminate'
+                      ? 'border border-destructive/50 bg-destructive text-destructive-foreground hover:bg-destructive/90'
+                      : confirmLifecycleAction === 'stop'
+                        ? 'border border-amber-400/50 bg-amber-500 text-black font-semibold hover:bg-amber-400'
+                        : confirmLifecycleAction === 'cancel'
+                          ? 'border border-amber-400/50 bg-amber-500 text-black font-semibold hover:bg-amber-400'
+                          : 'border border-emerald-400/50 bg-emerald-500 text-black font-semibold hover:bg-emerald-400'
+                  }`}
+                >
+                  {lifecycleBusy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  {confirmLifecycleAction === 'terminate'
+                    ? 'Confirm Termination'
+                    : confirmLifecycleAction === 'cancel'
+                      ? 'Confirm Cancel'
+                      : confirmLifecycleAction === 'stop'
+                        ? 'Confirm Pause'
+                        : 'Confirm Resume'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* AWS Bring Down Modal */}
+        {bringDownConfirmOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div
+              className="absolute inset-0 bg-black/75 backdrop-blur-sm"
+              onClick={() => !bringingDown && setBringDownConfirmOpen(false)}
+            />
+            <div className="relative z-10 w-full max-w-md rounded-2xl border border-white/10 bg-[#0E0E0E] p-6 shadow-2xl">
+              <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                <h3 className="text-base font-semibold text-white">Terminate AWS Resources</h3>
+                <button
+                  type="button"
+                  disabled={bringingDown}
+                  onClick={() => setBringDownConfirmOpen(false)}
+                  className="text-neutral-400 hover:text-white"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="mt-4 text-xs leading-relaxed text-destructive space-y-2">
+                <p className="font-semibold">This action cannot be undone.</p>
+                <p className="text-neutral-300">
+                  This will terminate the EC2 instance ({deploymentInstanceId}) and delete the associated ECR container image repository.
+                </p>
+              </div>
+              <div className="mt-6 flex justify-end gap-3 border-t border-white/10 pt-4">
+                <button
+                  type="button"
+                  disabled={bringingDown}
+                  onClick={() => setBringDownConfirmOpen(false)}
+                  className="border border-white/10 bg-[#161616] px-4 py-2 text-xs font-medium text-neutral-300 hover:text-white"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={bringingDown}
+                  onClick={() => void handleBringDown()}
+                  className="inline-flex items-center gap-1.5 border border-destructive/50 bg-destructive px-4 py-2 text-xs font-medium text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50"
+                >
+                  {bringingDown && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  Confirm Termination
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
-    </DashboardLayout>
+    </>
   );
 }

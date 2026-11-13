@@ -1,4 +1,4 @@
-import axios, { AxiosInstance, AxiosError, AxiosResponse } from 'axios';
+import axios, { AxiosInstance, AxiosError } from 'axios';
 import { API_BASE_URL, API_TIMEOUT, AUTH_TOKEN_KEY } from '@/lib/constants';
 
 const createAxiosClient = (): AxiosInstance => {
@@ -27,9 +27,20 @@ const createAxiosClient = (): AxiosInstance => {
     (response) => response,
     (error: AxiosError) => {
       if (error.response?.status === 401) {
-        // Handle unauthorized - redirect to login
-        localStorage.removeItem(AUTH_TOKEN_KEY);
-        window.location.href = '/login';
+        // Handle unauthorized - clear stale token and redirect to login,
+        // respecting the router basename so sub-path deploys still work.
+        const hadToken = localStorage.getItem(AUTH_TOKEN_KEY) !== null;
+        if (hadToken) {
+          localStorage.removeItem(AUTH_TOKEN_KEY);
+          const base = import.meta.env.BASE_URL && import.meta.env.BASE_URL !== './'
+            ? import.meta.env.BASE_URL.replace(/\/?$/, '/')
+            : '/';
+          const loginPath = `${base}login`.replace(/\/{2,}/g, '/');
+          const currentPath = window.location.pathname;
+          if (currentPath !== loginPath) {
+            window.location.href = loginPath;
+          }
+        }
       }
       return Promise.reject(error);
     }

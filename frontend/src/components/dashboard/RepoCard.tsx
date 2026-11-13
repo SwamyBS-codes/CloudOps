@@ -78,7 +78,7 @@ const RepoCard: React.FC<{
       <Card className="flex h-full flex-col border-border/60 bg-card/80 p-5 transition-all hover:border-primary/30 hover:shadow-glow">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-primary text-white">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-primary text-foreground">
               <Github className="h-5 w-5" />
             </div>
             <div>

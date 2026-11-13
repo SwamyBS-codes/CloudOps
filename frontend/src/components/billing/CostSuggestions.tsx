@@ -10,15 +10,15 @@ const suggestions = [
 ];
 
 const CostSuggestions: React.FC = () => (
-  <motion.div initial={{opacity:0,y:6}} animate={{opacity:1,y:0}} className="backdrop-blur-md bg-[rgba(12,16,26,0.6)] border border-white/6 rounded-xl p-4">
-    <h3 className="text-sm font-semibold text-white mb-3">Cost Optimization Suggestions</h3>
+  <motion.div initial={{opacity:0,y:6}} animate={{opacity:1,y:0}} className=" bg-card border border-border rounded-xl p-4">
+    <h3 className="text-sm font-semibold text-foreground mb-3">Cost Optimization Suggestions</h3>
     <div className="flex flex-col gap-3">
       {suggestions.map(s=> (
         <div key={s.title} className="flex items-start gap-3">
-          <div className="w-10 h-10 rounded-lg bg-white/6 flex items-center justify-center text-white">{s.icon}</div>
+          <div className="w-10 h-10 rounded-lg bg-secondary flex items-center justify-center text-foreground">{s.icon}</div>
           <div>
-            <div className="text-white/90 font-medium">{s.title}</div>
-            <div className="text-white/70 text-sm">{s.desc}</div>
+            <div className="text-foreground font-medium">{s.title}</div>
+            <div className="text-foreground text-sm">{s.desc}</div>
           </div>
         </div>
       ))}

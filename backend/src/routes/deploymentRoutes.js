@@ -30,7 +30,10 @@ router.post('/aws-ec2', deploymentController.startAWSEC2Deployment);
 router.get('/:deploymentId/status', deploymentController.getDeploymentStatus);
 router.get('/:deploymentId/logs', deploymentController.getDeploymentLogs);
 router.get('/:deploymentId/service-logs', deploymentController.getDeploymentServiceLogs);
+router.post('/:deploymentId/cancel', deploymentController.cancelDeployment);
 router.post('/:deploymentId/stop', deploymentController.stopDeployment);
+router.post('/:deploymentId/start', deploymentController.startDeployment);
 router.post('/:deploymentId/restart', deploymentController.restartDeployment);
+router.delete('/:deploymentId', deploymentController.terminateDeployment);
 
 module.exports = router;

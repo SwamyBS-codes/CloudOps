@@ -10,7 +10,7 @@ const Logo: React.FC<{ className?: string }> = ({ className }) => (
     whileHover={{ opacity: 0.85 }}
     whileTap={{ scale: 0.98 }}
   >
-    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+    <div className="flex h-8 w-8 items-center justify-center border border-primary/20 bg-primary text-primary-foreground">
       <Cloud className="h-4 w-4" strokeWidth={2} />
     </div>
     <div className="leading-none">

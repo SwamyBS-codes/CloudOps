@@ -2,12 +2,12 @@
 
 Modern React.js + Vite SaaS frontend for automated AWS deployment platform with predictive cost engine.
 
-## 🎨 Design System
+## Design system
 
-- **Dark Mode First**: Glasmorphism UI inspired by Vercel and Railway
-- **Responsive**: Mobile-first design system
-- **Production-Ready**: Tailwind CSS with custom theme
-- **Animations**: Framer Motion for smooth interactions
+- **Dark cloud control room**: Neutral black and charcoal surfaces, high-contrast text, electric-blue actions, and restrained operational status colors
+- **Square geometry**: Cards, controls, dialogs, badges, and avatars use zero corner radius
+- **Responsive**: Desktop sidebar and utility bar adapt to a compact mobile navigation
+- **Accessible**: Visible keyboard focus, readable status labels, and reduced-motion support
 
 ## 🛠️ Tech Stack
 
@@ -55,13 +55,13 @@ npm run dev
 npm run build
 ```
 
-## 🎨 Design Features
+## Design features
 
-- **Color Scheme**: Primary (#6C63FF), Accent (#00D4FF), Success (#00C896), Error (#FF5D73)
-- **Glassmorphism**: Frosted glass effect cards with backdrop blur
-- **Responsive Grid**: Auto-fit grid layouts
-- **Dark Mode**: Default dark theme with light mode support
-- **Animations**: Smooth transitions and microinteractions
+- **Color scheme**: Dark-only neutral charcoal palette with blue emphasis and semantic status colors
+- **Typography**: Inter for interface text and JetBrains Mono for deployment IDs, metrics, and logs
+- **Surfaces**: Fine borders and flat panels rather than glass, glow, or heavy gradients
+- **Dark mode**: Fixed dark theme; no light-mode toggle or light palette
+- **Motion**: Restrained transitions support state changes without distracting from deployment status
 
 ## 📦 Available Scripts
 
@@ -103,4 +103,3 @@ MIT License
 ---
 **Status**: Production-Ready  
 **Last Updated**: May 2026
-

@@ -1,56 +1,75 @@
-/*
- * CloudOps — Minimal design tokens
- * Light: clean white/slate · Dark: deep slate
- */
+/* Dark CloudOps palette adapted from the supplied 21st.dev theme. */
 
 :root {
-  --background: 0 0% 100%;
-  --foreground: 222 47% 11%;
-  --card: 0 0% 100%;
-  --card-foreground: 222 47% 11%;
-  --popover: 0 0% 100%;
-  --popover-foreground: 222 47% 11%;
-  --primary: 234 89% 58%;
-  --primary-foreground: 0 0% 100%;
-  --secondary: 220 14% 96%;
-  --secondary-foreground: 222 47% 11%;
-  --muted: 220 14% 96%;
-  --muted-foreground: 220 9% 46%;
-  --accent: 234 89% 58%;
+  color-scheme: dark;
+
+  --card: 0 0% 7%;
+  --ring: 221 87% 58%;
+  --input: 0 0% 18%;
+  --muted: 0 0% 11%;
+  --accent: 221 70% 45%;
+  --border: 0 0% 17%;
+  --radius: 0;
+  --chart-1: 221 87% 58%;
+  --chart-2: 221 70% 45%;
+  --chart-3: 0 0% 62%;
+  --chart-4: 0 0% 18%;
+  --chart-5: 0 0% 100%;
+  --popover: 0 0% 7%;
+  --primary: 221 87% 53%;
+  --sidebar: 0 0% 5%;
+  --secondary: 0 0% 11%;
+  --background: 0 0% 3%;
+  --foreground: 0 0% 96%;
+  --destructive: 0 62% 45%;
+  --sidebar-ring: 221 87% 58%;
+  --sidebar-accent: 0 0% 11%;
+  --sidebar-border: 0 0% 17%;
+  --card-foreground: 0 0% 96%;
+  --sidebar-primary: 221 87% 53%;
+  --muted-foreground: 0 0% 64%;
   --accent-foreground: 0 0% 100%;
-  --destructive: 0 72% 51%;
+  --popover-foreground: 0 0% 96%;
+  --primary-foreground: 0 0% 100%;
+  --sidebar-foreground: 0 0% 96%;
+  --secondary-foreground: 0 0% 96%;
   --destructive-foreground: 0 0% 100%;
-  --success: 142 71% 45%;
-  --success-foreground: 0 0% 100%;
-  --warning: 38 92% 50%;
-  --warning-foreground: 222 47% 11%;
-  --border: 220 13% 91%;
-  --input: 220 13% 91%;
-  --ring: 234 89% 58%;
-  --radius: 0.625rem;
+  --sidebar-accent-foreground: 0 0% 96%;
+  --sidebar-primary-foreground: 0 0% 100%;
+
+  --success: 153 55% 48%;
+  --success-foreground: 0 0% 3%;
+  --warning: 36 90% 58%;
+  --warning-foreground: 0 0% 3%;
 
   --color-bg-primary: hsl(var(--background));
-  --color-bg-secondary: hsl(220 14% 97%);
-  --color-bg-tertiary: hsl(220 14% 94%);
+  --color-bg-secondary: hsl(var(--card));
+  --color-bg-tertiary: hsl(var(--secondary));
   --color-surface: hsl(var(--card));
-  --color-surface-elevated: hsl(0 0% 100%);
-  --color-surface-glass: hsl(0 0% 100% / 0.92);
-  --color-surface-glass-light: hsl(220 14% 98% / 0.9);
+  --color-surface-elevated: hsl(var(--secondary));
+  --color-surface-glass: hsl(var(--card));
+  --color-surface-glass-light: hsl(var(--secondary));
   --color-primary: hsl(var(--primary));
+  --color-accent: hsl(var(--accent));
+  --color-success: hsl(var(--success));
+  --color-warning: hsl(var(--warning));
+  --color-error: hsl(var(--destructive));
   --color-text-primary: hsl(var(--foreground));
   --color-text-secondary: hsl(var(--muted-foreground));
-  --color-text-tertiary: hsl(220 9% 56%);
+  --color-text-tertiary: hsl(0 0% 62%);
   --color-border: hsl(var(--border));
+  --color-border-light: hsl(0 0% 22%);
+  --color-border-dark: hsl(var(--border));
 
-  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.04);
-  --shadow-md: 0 4px 12px rgb(0 0 0 / 0.06);
-  --shadow-lg: 0 8px 24px rgb(0 0 0 / 0.08);
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.24);
+  --shadow-md: 0 4px 12px rgb(0 0 0 / 0.32);
+  --shadow-lg: 0 8px 24px rgb(0 0 0 / 0.4);
   --shadow-glow: none;
-  --gradient-primary: linear-gradient(135deg, hsl(234 89% 58%) 0%, hsl(234 89% 48%) 100%);
-  --gradient-surface: linear-gradient(180deg, hsl(0 0% 100%) 0%, hsl(220 14% 98%) 100%);
+  --gradient-primary: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--accent)) 100%);
+  --gradient-surface: linear-gradient(180deg, hsl(var(--card)) 0%, hsl(var(--background)) 100%);
 
-  --font-sans: 'Inter', 'Plus Jakarta Sans', system-ui, sans-serif;
-  --font-display: 'Plus Jakarta Sans', 'Inter', sans-serif;
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-display: 'Inter', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
 
   --space-xs: 0.25rem;
@@ -61,45 +80,4 @@
   --duration-fast: 150ms;
   --duration-base: 200ms;
   --timing-smooth: cubic-bezier(0.4, 0, 0.2, 1);
-
-  color-scheme: light;
-}
-
-.dark {
-  --background: 224 71% 4%;
-  --foreground: 210 40% 98%;
-  --card: 224 71% 6%;
-  --card-foreground: 210 40% 98%;
-  --popover: 224 71% 6%;
-  --popover-foreground: 210 40% 98%;
-  --primary: 234 89% 64%;
-  --primary-foreground: 0 0% 100%;
-  --secondary: 215 28% 12%;
-  --secondary-foreground: 210 40% 98%;
-  --muted: 215 28% 12%;
-  --muted-foreground: 215 16% 57%;
-  --accent: 234 89% 64%;
-  --accent-foreground: 0 0% 100%;
-  --destructive: 0 72% 51%;
-  --border: 215 28% 14%;
-  --input: 215 28% 14%;
-  --ring: 234 89% 64%;
-
-  --color-bg-primary: hsl(var(--background));
-  --color-bg-secondary: hsl(224 71% 6%);
-  --color-bg-tertiary: hsl(215 28% 12%);
-  --color-surface: hsl(var(--card));
-  --color-surface-elevated: hsl(215 28% 12%);
-  --color-surface-glass: hsl(224 71% 6% / 0.9);
-  --color-text-primary: hsl(var(--foreground));
-  --color-text-secondary: hsl(var(--muted-foreground));
-  --color-border: hsl(var(--border));
-
-  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.2);
-  --shadow-md: 0 4px 12px rgb(0 0 0 / 0.3);
-  --shadow-lg: 0 8px 24px rgb(0 0 0 / 0.4);
-  --shadow-glow: 0 0 0 1px hsl(234 89% 64% / 0.15);
-  --gradient-surface: linear-gradient(180deg, hsl(224 71% 5%) 0%, hsl(224 71% 4%) 100%);
-
-  color-scheme: dark;
 }

@@ -1,0 +1,7 @@
+
+> backend@1.0.0 start
+> node server.js
+
+◇ injected env (0) from .env // tip: ⌘ override existing { override: true }
+Server running on port 3000
+The `uri` parameter to `openUri()` must be a string, got "undefined". Make sure the first parameter to `mongoose.connect()` or `mongoose.createConnection()` is a string.

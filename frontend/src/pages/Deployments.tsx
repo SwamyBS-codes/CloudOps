@@ -1,25 +1,29 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   AlertTriangle,
   ArrowRight,
   Activity,
+  Ban,
   CheckCircle2,
   Filter,
   Globe2,
   GitBranch,
   HeartPulse,
   Loader2,
+  Pause,
+  Play,
   RefreshCw,
   Search,
   Server,
   Layers3,
+  Trash2,
+  X,
   Cloud,
   Package,
 } from 'lucide-react';
-import { formatApplicationType, formatHealthStatus } from '@/lib/application-types';
-import { DashboardLayout } from '@/components/layout';
+import { formatApplicationType, formatHealthStatus, resolveDeploymentProvider } from '@/lib/application-types';
 import { authService, deploymentService } from '@/services/auth-service';
 import {
   PageHeader,
@@ -59,6 +63,20 @@ type DeploymentRecord = {
   metadata?: Record<string, any>;
 };
 
+const ACTIVE_DEPLOYMENT_STATUSES = [
+  'pending',
+  'queued',
+  'cloning',
+  'detecting',
+  'building',
+  'pushing',
+  'deploying',
+  'running',
+];
+
+const isDeploymentActive = (deployment: DeploymentRecord) =>
+  ACTIVE_DEPLOYMENT_STATUSES.includes(deployment.status || 'pending');
+
 const formatDate = (value?: string) => {
   if (!value) return 'Unknown';
   return new Date(value).toLocaleString();
@@ -75,15 +93,34 @@ const formatDuration = (ms?: number) => {
 
 export default function DeploymentsPage() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const deploymentId = searchParams.get('deploymentId') || '';
   const [connectedUserId, setConnectedUserId] = useState<string>('');
   const [deployments, setDeployments] = useState<DeploymentRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [actionSuccessMsg, setActionSuccessMsg] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+
+  const [confirmModal, setConfirmModal] = useState<{
+    action: 'cancel' | 'stop' | 'restart' | 'terminate';
+    id: string;
+    appName: string;
+    provider: string;
+  } | null>(null);
+  const [lifecycleBusyId, setLifecycleBusyId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const view = searchParams.get('view');
+    const nextFilter = view === 'active' ? 'deploying'
+      : view === 'attention' ? 'attention'
+        : view === 'history' ? 'history'
+          : view === 'success' || view === 'failed' ? view
+            : 'all';
+    setStatusFilter(nextFilter);
+  }, [searchParams]);
 
   useEffect(() => {
     if (deploymentId) {
@@ -91,68 +128,103 @@ export default function DeploymentsPage() {
     }
   }, [deploymentId, navigate]);
 
-  useEffect(() => {
-    let cancelled = false;
+  const fetchDeployments = useCallback(async (silent = false) => {
+    if (silent) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+    }
 
-    const fetchDeployments = async (silent = false) => {
-      if (silent) {
-        setRefreshing(true);
-      } else {
-        setLoading(true);
-      }
-
-      try {
-        let currentUserId = connectedUserId;
+    try {
+      let currentUserId = connectedUserId;
+      if (!currentUserId) {
+        const meResponse = await authService.getMe();
+        const meData = meResponse?.data as any;
+        currentUserId = String(meData?.user?.id || '');
         if (!currentUserId) {
-          const meResponse = await authService.getMe();
-          const meData = meResponse?.data as any;
-          currentUserId = String(meData?.user?.id || '');
-          if (!currentUserId) {
-            throw new Error('Unable to resolve connected GitHub user. Please sign in again.');
-          }
-          setConnectedUserId(currentUserId);
+          throw new Error('Unable to resolve connected GitHub user. Please sign in again.');
         }
-
-        const response = await deploymentService.getAll({ userId: currentUserId });
-        const responseData = response?.data as any;
-        const raw = responseData?.data || responseData?.deployments || responseData || [];
-        const nextDeployments = Array.isArray(raw) ? raw : [];
-
-        if (cancelled) return;
-        const userDeployments = nextDeployments
-          .filter((item: DeploymentRecord) => String((item as any)?.userId || '') === String(currentUserId))
-          .sort((a: DeploymentRecord, b: DeploymentRecord) => {
-            const aTime = new Date(a.updatedAt || a.createdAt || 0).getTime();
-            const bTime = new Date(b.updatedAt || b.createdAt || 0).getTime();
-            return bTime - aTime;
-          });
-
-        setDeployments(userDeployments);
-        setError(null);
-      } catch (fetchError: any) {
-        if (cancelled) return;
-        setError(fetchError?.response?.data?.error || fetchError?.message || 'Unable to load deployments.');
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-          setRefreshing(false);
-        }
+        setConnectedUserId(currentUserId);
       }
-    };
 
+      const response = await deploymentService.getAll({ userId: currentUserId });
+      const responseData = response?.data as any;
+      const raw = responseData?.data || responseData?.deployments || responseData || [];
+      const nextDeployments = Array.isArray(raw) ? raw : [];
+
+      const userDeployments = nextDeployments
+        .filter((item: DeploymentRecord) => String((item as any)?.userId || '') === String(currentUserId))
+        .sort((a: DeploymentRecord, b: DeploymentRecord) => {
+          const aTime = new Date(a.updatedAt || a.createdAt || 0).getTime();
+          const bTime = new Date(b.updatedAt || b.createdAt || 0).getTime();
+          return bTime - aTime;
+        });
+
+      setDeployments(userDeployments);
+      setError(null);
+    } catch (fetchError: any) {
+      setError(fetchError?.response?.data?.error || fetchError?.message || 'Unable to load deployments.');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [connectedUserId]);
+
+  useEffect(() => {
     void fetchDeployments();
     const timer = setInterval(() => void fetchDeployments(true), 8000);
+    return () => clearInterval(timer);
+  }, [fetchDeployments]);
 
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-    };
-  }, [connectedUserId]);
+  const handleLifecycleAction = async () => {
+    if (!confirmModal) return;
+    const { action, id, provider, appName } = confirmModal;
+    setLifecycleBusyId(id);
+    setError(null);
+    setActionSuccessMsg(null);
+
+    try {
+      if (action === 'cancel') {
+        await deploymentService.cancel(id);
+        setActionSuccessMsg(`Cancelled deployment for "${appName}".`);
+      } else if (action === 'stop') {
+        await deploymentService.stop(id);
+        setActionSuccessMsg(
+          provider === 'azure'
+            ? `Suspended compute for "${appName}". Billing paused ($0/hr).`
+            : `Stopped container for "${appName}".`
+        );
+      } else if (action === 'restart') {
+        await (provider === 'azure' ? deploymentService.start(id) : deploymentService.restart(id));
+        setActionSuccessMsg(`Resumed container for "${appName}".`);
+      } else if (action === 'terminate') {
+        if (provider === 'azure') {
+          await deploymentService.terminateAzureDeployment(id);
+          setActionSuccessMsg(`Terminated Azure resources for "${appName}".`);
+        } else {
+          await deploymentService.delete(id);
+          setActionSuccessMsg(`Terminated deployment for "${appName}".`);
+        }
+      }
+      setConfirmModal(null);
+      await fetchDeployments(true);
+    } catch (err: any) {
+      setError(err?.response?.data?.error || err?.message || `Failed to ${action} deployment.`);
+      setConfirmModal(null);
+    } finally {
+      setLifecycleBusyId(null);
+    }
+  };
 
   const filteredDeployments = useMemo(() => {
     return deployments.filter((deployment) => {
       const matchesQuery = `${deployment.applicationName || ''} ${deployment.repositoryName || ''} ${deployment.applicationType || ''} ${deployment.repositoryUrl || ''}`.toLowerCase().includes(query.toLowerCase());
-      const matchesStatus = statusFilter === 'all' || deployment.status === statusFilter;
+      const matchesStatus =
+        statusFilter === 'all'
+        || (statusFilter === 'deploying' && isDeploymentActive(deployment))
+        || (statusFilter === 'attention' && deployment.status === 'failed')
+        || (statusFilter === 'history' && !isDeploymentActive(deployment))
+        || deployment.status === statusFilter;
       return matchesQuery && matchesStatus;
     });
   }, [deployments, query, statusFilter]);
@@ -165,8 +237,11 @@ export default function DeploymentsPage() {
     }, {});
   }, [deployments]);
 
+  const activeDeployments = filteredDeployments.filter(isDeploymentActive);
+  const historyDeployments = filteredDeployments.filter((deployment) => !isDeploymentActive(deployment));
+
   return (
-    <DashboardLayout>
+    <>
       <PageHeader
         title="Deployments"
         description="Review every deployment, inspect live status, project info, and build logs."
@@ -175,37 +250,7 @@ export default function DeploymentsPage() {
             variant="outline"
             size="sm"
             disabled={refreshing}
-            onClick={() => {
-              setRefreshing(true);
-              void (async () => {
-                try {
-                  let currentUserId = connectedUserId;
-                  if (!currentUserId) {
-                    const meResponse = await authService.getMe();
-                    const meData = meResponse?.data as any;
-                    currentUserId = String(meData?.user?.id || '');
-                    setConnectedUserId(currentUserId);
-                  }
-                  const response = await deploymentService.getAll({ userId: currentUserId });
-                  const responseData = response?.data as any;
-                  const raw = responseData?.data || responseData?.deployments || responseData || [];
-                  const nextDeployments = Array.isArray(raw) ? raw : [];
-                  const userDeployments = nextDeployments
-                    .filter((item: DeploymentRecord) => String((item as any)?.userId || '') === String(currentUserId))
-                    .sort((a: DeploymentRecord, b: DeploymentRecord) => {
-                      const aTime = new Date(a.updatedAt || a.createdAt || 0).getTime();
-                      const bTime = new Date(b.updatedAt || b.createdAt || 0).getTime();
-                      return bTime - aTime;
-                    });
-                  setDeployments(userDeployments);
-                  setError(null);
-                } catch (refreshError: any) {
-                  setError(refreshError?.response?.data?.error || refreshError?.message || 'Unable to refresh deployments.');
-                } finally {
-                  setRefreshing(false);
-                }
-              })();
-            }}
+            onClick={() => void fetchDeployments(true)}
           >
             {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
             Refresh
@@ -219,11 +264,17 @@ export default function DeploymentsPage() {
         </Alert>
       )}
 
+      {actionSuccessMsg && (
+        <div role="status" className="mb-6 border border-emerald-400/30 bg-emerald-400/[0.06] px-4 py-3 text-sm text-emerald-300">
+          {actionSuccessMsg}
+        </div>
+      )}
+
       <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {[
           { label: 'Total', value: String(deployments.length), icon: Server },
           { label: 'Successful', value: String(statusCounts.success || 0), icon: CheckCircle2 },
-          { label: 'Running', value: String((statusCounts.running || 0) + (statusCounts.deploying || 0)), icon: Activity },
+          { label: 'Running', value: String(ACTIVE_DEPLOYMENT_STATUSES.reduce((count, status) => count + (statusCounts[status] || 0), 0)), icon: Activity },
           { label: 'Failed', value: String(statusCounts.failed || 0), icon: AlertTriangle },
         ].map((item, i) => (
           <MetricCard key={item.label} label={item.label} value={item.value} icon={item.icon} loading={loading} delay={i * 0.06} />
@@ -240,20 +291,30 @@ export default function DeploymentsPage() {
               icon={<Search className="h-4 w-4" />}
             />
           </div>
-          <div className="flex flex-wrap items-center gap-1 rounded-lg bg-secondary/80 p-1">
+          <div className="flex flex-wrap items-center gap-1 border border-border bg-secondary/80 p-1">
             <Filter className="ml-2 h-4 w-4 text-muted-foreground" aria-hidden />
-            {['all', 'success', 'deploying', 'running', 'failed'].map((status) => (
+            {[
+              { key: 'all', label: 'All' },
+              { key: 'deploying', label: 'Active' },
+              { key: 'attention', label: 'Needs attention' },
+              { key: 'history', label: 'History' },
+              { key: 'success', label: 'Successful' },
+              { key: 'failed', label: 'Failed' },
+            ].map(({ key, label }) => (
               <button
-                key={status}
+                key={key}
                 type="button"
-                onClick={() => setStatusFilter(status)}
-                className={`rounded-md px-3 py-1.5 text-xs font-medium capitalize transition ${
-                  statusFilter === status
+                onClick={() => {
+                  setStatusFilter(key);
+                  setSearchParams({ view: key === 'deploying' ? 'active' : key });
+                }}
+                className={`px-3 py-1.5 text-xs font-medium transition ${
+                  statusFilter === key
                     ? 'bg-card text-foreground shadow-sm'
                     : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
-                {status}
+                {label}
               </button>
             ))}
           </div>
@@ -273,41 +334,126 @@ export default function DeploymentsPage() {
           description={query || statusFilter !== 'all' ? 'Try adjusting your search or filters.' : 'Deploy a repository to see it here.'}
         />
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {filteredDeployments.map((deployment, index) => {
+        <div className="space-y-8">
+          {activeDeployments.length > 0 && (
+            <section aria-labelledby="active-deployments-heading">
+              <div className="mb-3 flex items-end justify-between gap-4">
+                <div>
+                  <h2 id="active-deployments-heading" className="text-lg font-semibold text-foreground">
+                    Deploying now
+                  </h2>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    These jobs continue on the server if you leave this page. Open any job to follow its live logs.
+                  </p>
+                </div>
+                <span className="shrink-0 font-mono text-xs text-primary">{activeDeployments.length} ACTIVE</span>
+              </div>
+              <div className="space-y-2">
+                {activeDeployments.map((deployment) => {
+                  const provider = resolveDeploymentProvider(deployment as any);
+                  const appName = deployment.applicationName || deployment.repositoryName || 'Unnamed application';
+                  return (
+                    <div
+                      key={deployment._id}
+                      onClick={() => navigate(`/deployments/${encodeURIComponent(deployment._id)}`)}
+                      className="group flex w-full flex-wrap items-center justify-between gap-4 border border-primary/25 bg-card px-4 py-4 text-left transition hover:border-primary/60 hover:bg-secondary sm:px-5 cursor-pointer"
+                    >
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Activity className="h-4 w-4 text-primary" />
+                          <h3 className="truncate font-semibold text-foreground group-hover:text-primary">
+                            {appName}
+                          </h3>
+                          <StatusBadge status={deployment.status || 'pending'} />
+                        </div>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {deployment.repositoryName || deployment.repositoryUrl || 'Repository'}
+                          {' · '}
+                          {deployment.phase
+                            ? deployment.phase.replace(/[_-]/g, ' ')
+                            : 'Waiting for worker'}
+                          {' · '}
+                          {deployment.branch || 'main'}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          disabled={lifecycleBusyId === deployment._id}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setConfirmModal({
+                              action: 'cancel',
+                              id: deployment._id,
+                              appName,
+                              provider,
+                            });
+                          }}
+                          className="inline-flex items-center gap-1.5 border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-xs font-medium text-amber-300 transition hover:bg-amber-400/20 disabled:opacity-50"
+                        >
+                          {lifecycleBusyId === deployment._id ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Ban className="h-3.5 w-3.5" />
+                          )}
+                          Cancel deployment
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/deployments/${encodeURIComponent(deployment._id)}`)}
+                          className="inline-flex shrink-0 items-center gap-2 border border-border px-3 py-2 text-xs font-medium text-foreground transition group-hover:border-primary/50"
+                        >
+                          <Activity className="h-3.5 w-3.5 text-primary" />
+                          View live logs
+                          <ArrowRight className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+
+          {historyDeployments.length > 0 && (
+            <section aria-labelledby="deployment-history-heading">
+              <h2 id="deployment-history-heading" className="mb-3 text-lg font-semibold text-foreground">
+                Recent deployments
+              </h2>
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {historyDeployments.map((deployment, index) => {
             const status = deployment.status || 'pending';
             const liveUrl = deployment.domainUrl || deployment.publicUrl || deployment.metadata?.liveUrl;
             const appName = deployment.applicationName || deployment.repositoryName || 'Unnamed application';
             const appType = formatApplicationType(deployment.applicationType);
             const health = formatHealthStatus(deployment.healthStatus);
             
-            // Determine provider
-            const deploymentService = (deployment as any)?.deploymentService || 'unknown';
-            const provider = (deployment as any)?.infrastructure?.provider || deploymentService;
-            const isAWS = provider === 'aws' || deploymentService === 'aws';
-            const isAzure = provider === 'azure' || deploymentService === 'azure';
-            const isS3 = deploymentService === 's3-static' || deploymentService === 's3' || provider === 's3';
-            
-            let providerBadge = { label: 'Cloud', color: 'bg-blue-500/10 text-blue-400 border-blue-500/20' };
-            if (isAWS) {
+            // Determine provider (shared derivation, no shadowing)
+            const provider = resolveDeploymentProvider(deployment as any);
+
+            let providerBadge = { label: 'Cloud', color: 'bg-secondary text-blue-400 border-border' };
+            if (provider === 'aws') {
               providerBadge = { label: 'AWS', color: 'bg-orange-500/10 text-orange-400 border-orange-500/20' };
-            } else if (isAzure) {
-              providerBadge = { label: 'Azure', color: 'bg-sky-500/10 text-sky-400 border-sky-500/20' };
-            } else if (isS3) {
-              providerBadge = { label: 'S3', color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' };
+            } else if (provider === 'azure') {
+              providerBadge = { label: 'Azure', color: 'bg-secondary text-sky-400 border-border' };
+            } else if (provider === 's3') {
+              providerBadge = { label: 'S3', color: 'bg-success/10 text-success border-success' };
             }
 
             return (
-              <motion.button
+              <motion.div
                 key={deployment._id}
-                type="button"
+                role="button"
+                tabIndex={0}
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.04 }}
                 whileHover={{ y: -2 }}
                 whileTap={{ scale: 0.99 }}
                 onClick={() => navigate(`/deployments/${deployment._id}`)}
-                className="group rounded-xl border border-border/60 bg-card/80 p-5 text-left shadow-sm transition hover:border-primary/30 hover:shadow-glow"
+                className="group cursor-pointer rounded-xl border border-border/60 bg-card/80 p-5 text-left shadow-sm transition hover:border-primary/30 hover:shadow-glow"
               >
                 <div className="flex items-start justify-between gap-3 mb-3">
                   <div className="min-w-0">
@@ -331,7 +477,7 @@ export default function DeploymentsPage() {
 
                 {/* Provider-specific details */}
                 <div className="mb-4 rounded-lg bg-secondary/30 p-3 text-xs space-y-2 border border-border/40">
-                  {isAWS && (
+                  {provider === 'aws' && (
                     <>
                       {(deployment as any)?.infrastructure?.ec2?.instanceId && (
                         <div className="flex justify-between">
@@ -347,23 +493,27 @@ export default function DeploymentsPage() {
                       )}
                     </>
                   )}
-                  {isAzure && (
+                  {provider === 'azure' && (
                     <>
-                      {(deployment as any)?.infrastructure?.aci?.containerGroupName && (
+                      {((deployment as any)?.infrastructure?.aci?.containerGroupName || (deployment as any)?.metadata?.containerName) && (
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Container:</span>
-                          <span className="font-mono text-foreground text-xs">{(deployment as any).infrastructure.aci.containerGroupName}</span>
+                          <span className="font-mono text-foreground text-xs">
+                            {(deployment as any)?.infrastructure?.aci?.containerGroupName || (deployment as any)?.metadata?.containerName}
+                          </span>
                         </div>
                       )}
-                      {(deployment as any)?.infrastructure?.aci?.location && (
+                      {((deployment as any)?.infrastructure?.aci?.location || (deployment as any)?.infrastructure?.region) && (
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Location:</span>
-                          <span className="text-foreground">{(deployment as any).infrastructure.aci.location}</span>
+                          <span className="text-foreground">
+                            {(deployment as any)?.infrastructure?.aci?.location || (deployment as any)?.infrastructure?.region}
+                          </span>
                         </div>
                       )}
                     </>
                   )}
-                  {isS3 && (
+                  {provider === 's3' && (
                     <>
                       {(deployment as any)?.infrastructure?.s3?.bucket && (
                         <div className="flex justify-between">
@@ -419,14 +569,206 @@ export default function DeploymentsPage() {
                   )}
                 </div>
 
-                <div className="mt-3 flex items-center justify-end gap-1 text-sm font-medium text-primary">
-                  Open details <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
+                {/* Lifecycle action row */}
+                <div className="mt-3.5 flex flex-wrap items-center justify-between gap-2 border-t border-border/40 pt-3">
+                  <div className="flex flex-wrap items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                    {/* If stopped: Resume */}
+                    {status === 'stopped' && (
+                      <button
+                        type="button"
+                        disabled={lifecycleBusyId === deployment._id}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setConfirmModal({
+                            action: 'restart',
+                            id: deployment._id,
+                            appName,
+                            provider,
+                          });
+                        }}
+                        className="inline-flex items-center gap-1 rounded-md border border-emerald-400/40 bg-emerald-400/10 px-2.5 py-1 text-xs font-medium text-emerald-300 transition hover:bg-emerald-400/20 disabled:opacity-50"
+                      >
+                        <Play className="h-3 w-3" />
+                        Resume
+                      </button>
+                    )}
+
+                    {/* If running or success: Pause Compute */}
+                    {(status === 'running' || status === 'success') && (
+                      <button
+                        type="button"
+                        disabled={lifecycleBusyId === deployment._id}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setConfirmModal({
+                            action: 'stop',
+                            id: deployment._id,
+                            appName,
+                            provider,
+                          });
+                        }}
+                        className="inline-flex items-center gap-1 rounded-md border border-amber-400/40 bg-amber-400/10 px-2.5 py-1 text-xs font-medium text-amber-300 transition hover:bg-amber-400/20 disabled:opacity-50"
+                      >
+                        <Pause className="h-3 w-3" />
+                        {provider === 'azure' ? 'Pause ($0/hr)' : 'Stop'}
+                      </button>
+                    )}
+
+                    {/* If active / deploying: Cancel */}
+                    {isDeploymentActive(deployment) && (
+                      <button
+                        type="button"
+                        disabled={lifecycleBusyId === deployment._id}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setConfirmModal({
+                            action: 'cancel',
+                            id: deployment._id,
+                            appName,
+                            provider,
+                          });
+                        }}
+                        className="inline-flex items-center gap-1 rounded-md border border-amber-400/40 bg-amber-400/10 px-2.5 py-1 text-xs font-medium text-amber-300 transition hover:bg-amber-400/20 disabled:opacity-50"
+                      >
+                        <Ban className="h-3 w-3" />
+                        Cancel
+                      </button>
+                    )}
+
+                    {/* Terminate button for deployed, stopped, or failed */}
+                    {['success', 'running', 'stopped', 'failed'].includes(status) && (
+                      <button
+                        type="button"
+                        disabled={lifecycleBusyId === deployment._id}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setConfirmModal({
+                            action: 'terminate',
+                            id: deployment._id,
+                            appName,
+                            provider,
+                          });
+                        }}
+                        className="inline-flex items-center gap-1 rounded-md border border-destructive/40 bg-destructive/10 px-2.5 py-1 text-xs font-medium text-destructive transition hover:bg-destructive/20 disabled:opacity-50"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                        Terminate
+                      </button>
+                    )}
+                  </div>
+
+                  <span className="inline-flex items-center gap-1 text-xs font-medium text-primary group-hover:underline">
+                    Details <ArrowRight className="h-3.5 w-3.5 transition group-hover:translate-x-0.5" />
+                  </span>
                 </div>
-              </motion.button>
+              </motion.div>
             );
           })}
+              </div>
+            </section>
+          )}
         </div>
       )}
-    </DashboardLayout>
+
+      {/* Confirmation Modal */}
+      {confirmModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/75 backdrop-blur-sm"
+            onClick={() => !lifecycleBusyId && setConfirmModal(null)}
+          />
+          <div className="relative z-10 w-full max-w-md rounded-2xl border border-border bg-[#0E0E0E] p-6 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-border/60 pb-3">
+              <h3 className="text-base font-semibold text-foreground">
+                {confirmModal.action === 'cancel'
+                  ? 'Cancel Deployment'
+                  : confirmModal.action === 'stop'
+                    ? (confirmModal.provider === 'azure' ? 'Pause Compute (Suspend Billing)' : 'Stop Container')
+                    : confirmModal.action === 'restart'
+                      ? 'Resume Container'
+                      : 'Terminate Deployment & Resources'}
+              </h3>
+              <button
+                type="button"
+                disabled={Boolean(lifecycleBusyId)}
+                onClick={() => setConfirmModal(null)}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="mt-4 text-xs leading-relaxed text-neutral-300">
+              <p className="font-medium text-white mb-2">Project: {confirmModal.appName}</p>
+              {confirmModal.action === 'cancel' && (
+                <p>
+                  Are you sure you want to cancel this deployment? In-progress build, push, and container provisioning tasks will be aborted immediately.
+                </p>
+              )}
+              {confirmModal.action === 'stop' && (
+                <p>
+                  {confirmModal.provider === 'azure'
+                    ? 'Suspending this Azure Container Group stops compute billing ($0/hr). Your Docker image in ACR and configuration are retained so you can resume anytime.'
+                    : 'Stopping this container will halt compute while keeping deployment configuration intact.'}
+                </p>
+              )}
+              {confirmModal.action === 'restart' && (
+                <p>
+                  {confirmModal.provider === 'azure'
+                    ? 'Resume this suspended Azure container? Compute will begin running again and your application will be accessible at its public URL.'
+                    : 'Restart this container to resume running the application.'}
+                </p>
+              )}
+              {confirmModal.action === 'terminate' && (
+                <div className="space-y-2">
+                  <p className="font-semibold text-destructive">
+                    This action is permanent and cannot be undone.
+                  </p>
+                  <p>
+                    {confirmModal.provider === 'azure'
+                      ? 'This will permanently delete the Azure Container Group from your Azure subscription.'
+                      : 'This will terminate and delete the deployment resources.'}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3 border-t border-border/60 pt-4">
+              <button
+                type="button"
+                disabled={Boolean(lifecycleBusyId)}
+                onClick={() => setConfirmModal(null)}
+                className="rounded-xl border border-border bg-secondary px-4 py-2 text-xs font-medium text-neutral-300 hover:text-white"
+              >
+                Keep as is
+              </button>
+              <button
+                type="button"
+                disabled={Boolean(lifecycleBusyId)}
+                onClick={() => void handleLifecycleAction()}
+                className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-medium disabled:opacity-50 ${
+                  confirmModal.action === 'terminate'
+                    ? 'border border-destructive/50 bg-destructive text-destructive-foreground hover:bg-destructive/90'
+                    : confirmModal.action === 'stop'
+                      ? 'border border-amber-400/50 bg-amber-500 text-black font-semibold hover:bg-amber-400'
+                      : confirmModal.action === 'cancel'
+                        ? 'border border-amber-400/50 bg-amber-500 text-black font-semibold hover:bg-amber-400'
+                        : 'border border-emerald-400/50 bg-emerald-500 text-black font-semibold hover:bg-emerald-400'
+                }`}
+              >
+                {lifecycleBusyId && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                {confirmModal.action === 'terminate'
+                  ? 'Confirm Termination'
+                  : confirmModal.action === 'cancel'
+                    ? 'Confirm Cancel'
+                    : confirmModal.action === 'stop'
+                      ? 'Confirm Pause'
+                      : 'Confirm Resume'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

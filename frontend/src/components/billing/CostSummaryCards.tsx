@@ -3,13 +3,13 @@ import { motion } from 'framer-motion';
 import { Banknote, ServerCog, Database, Share2 } from 'lucide-react';
 
 const Card = ({ label, value, icon }: { label: string; value: string; icon: React.ReactNode }) => (
-  <motion.div whileHover={{ y: -6 }} className="p-4 rounded-xl bg-gradient-to-tr from-[rgba(255,255,255,0.02)] to-[rgba(255,255,255,0.01)] border border-white/6 backdrop-blur-md">
+  <motion.div whileHover={{ y: -6 }} className="p-4 rounded-xl bg-gradient-to-tr from-[rgba(255,255,255,0.02)] to-[rgba(255,255,255,0.01)] border border-border ">
     <div className="flex items-center justify-between gap-3">
       <div>
-        <div className="text-xs text-white/60">{label}</div>
-        <div className="text-2xl font-bold text-white mt-1">{value}</div>
+        <div className="text-xs text-muted-foreground">{label}</div>
+        <div className="text-2xl font-bold text-foreground mt-1">{value}</div>
       </div>
-      <div className="w-12 h-12 rounded-lg bg-gradient-to-tr from-primary to-accent flex items-center justify-center text-white shadow-glow">
+      <div className="w-12 h-12 rounded-lg bg-gradient-to-tr from-primary to-accent flex items-center justify-center text-foreground shadow-glow">
         {icon}
       </div>
     </div>

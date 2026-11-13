@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Menu, X, Github, Sun, Moon } from 'lucide-react';
-import { useTheme } from '@/context/ThemeContext';
+import { Menu, X, Github } from 'lucide-react';
 import { useAuth } from '@/app/providers/auth-provider';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -17,7 +16,6 @@ const navLinks = [
 const Navbar: React.FC = () => {
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
-  const { theme, toggleTheme } = useTheme();
   const { isAuthenticated, logout, user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -40,7 +38,7 @@ const Navbar: React.FC = () => {
         className={cn(
           'fixed inset-x-0 top-0 z-50 border-b transition-all duration-base',
           scrolled
-            ? 'border-border bg-background/90 backdrop-blur-md shadow-sm'
+            ? 'border-border bg-background/90  shadow-sm'
             : 'border-transparent bg-transparent'
         )}
       >
@@ -52,7 +50,7 @@ const Navbar: React.FC = () => {
               <a
                 key={link.label}
                 href={link.href}
-                className="rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                className="border-b-2 border-transparent px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:border-primary hover:bg-secondary hover:text-foreground"
               >
                 {link.label}
               </a>
@@ -60,15 +58,6 @@ const Navbar: React.FC = () => {
           </nav>
 
           <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={toggleTheme}
-              aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
-            >
-              {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-            </Button>
-
             {isAuthenticated ? (
               <>
                 <Button variant="ghost" size="sm" className="hidden sm:inline-flex" onClick={() => navigate('/dashboard')}>
@@ -111,7 +100,7 @@ const Navbar: React.FC = () => {
                 <a
                   key={link.label}
                   href={link.href}
-                  className="rounded-lg px-3 py-2.5 text-sm font-medium text-foreground hover:bg-secondary"
+                  className="border-l-2 border-transparent px-3 py-2.5 text-sm font-medium text-foreground hover:border-primary hover:bg-secondary"
                   onClick={() => setOpen(false)}
                 >
                   {link.label}
@@ -119,10 +108,10 @@ const Navbar: React.FC = () => {
               ))}
               {isAuthenticated ? (
                 <>
-                  <button type="button" className="rounded-lg px-3 py-2.5 text-left text-sm font-medium hover:bg-secondary" onClick={() => { setOpen(false); navigate('/dashboard'); }}>
+                  <button type="button" className="border-l-2 border-transparent px-3 py-2.5 text-left text-sm font-medium hover:border-primary hover:bg-secondary" onClick={() => { setOpen(false); navigate('/dashboard'); }}>
                     Dashboard
                   </button>
-                  <button type="button" className="rounded-lg px-3 py-2.5 text-left text-sm text-destructive hover:bg-secondary" onClick={() => { logout(); navigate('/login'); }}>
+                  <button type="button" className="border-l-2 border-transparent px-3 py-2.5 text-left text-sm text-destructive hover:border-destructive hover:bg-secondary" onClick={() => { logout(); navigate('/login'); }}>
                     Sign out ({userName})
                   </button>
                 </>

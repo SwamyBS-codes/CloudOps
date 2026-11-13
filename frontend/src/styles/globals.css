@@ -1,6 +1,5 @@
 /* 
- * CloudOps Design System - Global Styles
- * Dark mode, glassmorphism, and utility classes
+ * CloudOps control room — square surfaces, quiet borders, clear status color.
  */
 
 @import './tokens.css';
@@ -8,18 +7,34 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  color-scheme: light;
-}
-
-.dark {
-  color-scheme: dark;
-}
-
 /* ========== BASE STYLES ========== */
+
+.dark-chart .recharts-cartesian-axis-tick-value,
+.dark-chart .recharts-pie-label-text,
+.dark-chart .recharts-label,
+.dark-chart .recharts-polar-angle-axis-tick-value,
+.dark-chart .recharts-polar-radius-axis-tick-value {
+  fill: #fff !important;
+  color: #fff !important;
+}
+
+.dark-chart .recharts-cartesian-axis-tick-line,
+.dark-chart .recharts-cartesian-axis-line {
+  stroke: #8a8a8a !important;
+}
+
+.dark-chart .recharts-legend-item-text {
+  color: #fff !important;
+}
 
 * {
   @apply m-0 p-0 box-border;
+}
+
+*,
+*::before,
+*::after {
+  border-radius: 0 !important;
 }
 
 html {
@@ -59,8 +74,8 @@ select:focus-visible,
 [role='button']:focus-visible {
   outline: none;
   box-shadow:
-    0 0 0 2px rgba(11, 16, 32, 1),
-    0 0 0 4px rgba(0, 212, 255, 0.4);
+    0 0 0 2px hsl(var(--background)),
+    0 0 0 4px hsl(var(--ring) / 0.22);
 }
 
 /* ========== TYPOGRAPHY ========== */
@@ -129,8 +144,8 @@ code {
 }
 
 ::selection {
-  background: rgba(0, 212, 255, 0.25);
-  color: #fff;
+  background: hsl(var(--primary) / 0.28);
+  color: hsl(var(--foreground));
 }
 
 /* ========== SCROLLBAR ========== */
@@ -149,23 +164,23 @@ code {
 
 /* ========== UTILITY CLASSES ========== */
 
-/* Glassmorphism */
+/* Solid, low-noise surfaces */
 .glass {
-  @apply bg-glass backdrop-blur-md border border-border;
+  @apply bg-card border border-border;
   background: var(--color-surface-glass);
-  box-shadow: var(--shadow-glass);
+  box-shadow: none;
 }
 
 .glass-light {
-  @apply bg-glass-light backdrop-blur-sm border border-border;
+  @apply bg-glass-light border border-border;
   background: var(--color-surface-glass-light);
-  box-shadow: var(--shadow-glass-sm);
+  box-shadow: none;
 }
 
 .glass-elevated {
   @apply glass;
   background: var(--color-surface-elevated);
-  box-shadow: var(--shadow-elevation-2);
+  box-shadow: none;
 }
 
 /* Cards */
@@ -203,15 +218,15 @@ code {
 
 /* Glow Effects */
 .glow {
-  box-shadow: var(--shadow-glow);
+  box-shadow: none;
 }
 
 .glow-accent {
-  box-shadow: var(--shadow-glow-accent);
+  box-shadow: none;
 }
 
 .glow-lg {
-  box-shadow: 0 0 40px rgba(108, 99, 255, 0.4);
+  box-shadow: none;
 }
 
 /* Elevation Shadows */
@@ -289,7 +304,7 @@ code {
 }
 
 .surface-panel {
-  @apply rounded-xl border border-border bg-card/80 backdrop-blur-md shadow-md;
+  @apply border border-border bg-card;
 }
 
 .surface-panel-hover {
@@ -318,14 +333,14 @@ code {
 }
 
 .toast {
-  @apply glass p-md rounded-2xl border border-border;
+  @apply glass p-md border border-border;
   pointer-events: auto;
   animation: toastFadeIn 0.25s ease-out;
   position: relative;
 }
 
 .toast-info {
-  border-color: rgba(0, 212, 255, 0.3);
+  border-color: rgba(36, 88, 211, 0.3);
 }
 
 .toast-success {
@@ -385,7 +400,6 @@ code {
 
 .app-orb {
   position: absolute;
-  border-radius: 9999px;
   filter: blur(50px);
   opacity: 0.55;
 }
@@ -395,7 +409,7 @@ code {
   left: -4rem;
   height: 18rem;
   width: 18rem;
-  background: rgba(108, 99, 255, 0.14);
+  background: rgba(255, 255, 255, 0.035);
 }
 
 .app-orb--accent {
@@ -403,7 +417,7 @@ code {
   right: -5rem;
   height: 20rem;
   width: 20rem;
-  background: rgba(0, 212, 255, 0.12);
+  background: rgba(255, 255, 255, 0.025);
 }
 
 .app-orb--success {
@@ -411,7 +425,7 @@ code {
   left: 30%;
   height: 16rem;
   width: 16rem;
-  background: rgba(0, 200, 150, 0.1);
+  background: rgba(255, 255, 255, 0.02);
 }
 
 .floating-indicator {
@@ -422,8 +436,8 @@ code {
   content: '';
   position: absolute;
   inset: -0.25rem;
-  border-radius: inherit;
-  background: radial-gradient(circle, rgba(0, 212, 255, 0.18), transparent 65%);
+  border-radius: 0;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.08), transparent 65%);
   animation: pulse-soft 2.2s ease-in-out infinite;
   z-index: -1;
 }
@@ -499,7 +513,7 @@ code {
 
 /* Badge */
 .badge {
-  @apply inline-flex items-center justify-center px-md py-xs rounded-full text-sm font-medium;
+  @apply inline-flex items-center justify-center px-md py-xs text-sm font-medium;
   background-color: var(--color-surface-elevated);
   color: var(--color-text-secondary);
   border: 1px solid var(--color-border);
@@ -507,35 +521,35 @@ code {
 
 .badge-primary {
   @apply badge;
-  background-color: rgba(108, 99, 255, 0.1);
+  background-color: hsl(var(--primary) / 0.1);
   color: var(--color-primary);
-  border-color: rgba(108, 99, 255, 0.3);
+  border-color: hsl(var(--primary) / 0.3);
 }
 
 .badge-success {
   @apply badge;
-  background-color: rgba(0, 200, 150, 0.1);
+  background-color: hsl(var(--success) / 0.1);
   color: var(--color-success);
-  border-color: rgba(0, 200, 150, 0.3);
+  border-color: hsl(var(--success) / 0.3);
 }
 
 .badge-error {
   @apply badge;
-  background-color: rgba(255, 93, 115, 0.1);
+  background-color: hsl(var(--destructive) / 0.1);
   color: var(--color-error);
-  border-color: rgba(255, 93, 115, 0.3);
+  border-color: hsl(var(--destructive) / 0.3);
 }
 
 .badge-warning {
   @apply badge;
-  background-color: rgba(245, 158, 11, 0.1);
+  background-color: hsl(var(--warning) / 0.1);
   color: var(--color-warning);
-  border-color: rgba(245, 158, 11, 0.3);
+  border-color: hsl(var(--warning) / 0.3);
 }
 
 /* Button Base Styles */
 .btn {
-  @apply inline-flex items-center justify-center gap-md rounded-lg font-medium transition-all duration-fast;
+  @apply inline-flex items-center justify-center gap-md font-medium transition-colors duration-fast;
   padding: var(--space-md) var(--space-lg);
   cursor: pointer;
   border: none;
@@ -553,7 +567,7 @@ code {
 }
 
 .btn-sm {
-  @apply inline-flex items-center justify-center gap-md rounded-lg font-medium transition-all duration-fast;
+  @apply inline-flex items-center justify-center gap-md font-medium transition-colors duration-fast;
   padding: var(--space-sm) var(--space-md);
   font-size: var(--text-sm);
   cursor: pointer;
@@ -600,7 +614,7 @@ code {
   user-select: none;
   background-color: var(--color-primary);
   color: white;
-  box-shadow: var(--shadow-glow);
+  box-shadow: none;
   
   &:focus-visible {
     @apply outline-2 outline-offset-2 outline-primary;
@@ -612,16 +626,16 @@ code {
   
   &:hover:not(:disabled) {
     background-color: var(--color-primary-800);
-    box-shadow: var(--shadow-glow) 0 0 30px rgba(108, 99, 255, 0.5);
+    box-shadow: none;
   }
   
   &:active:not(:disabled) {
-    transform: scale(0.98);
+    transform: none;
   }
 }
 
 .btn-secondary {
-  @apply inline-flex items-center justify-center gap-md rounded-lg font-medium transition-all duration-fast;
+  @apply inline-flex items-center justify-center gap-md font-medium transition-colors duration-fast;
   padding: var(--space-md) var(--space-lg);
   cursor: pointer;
   border: none;
@@ -666,7 +680,7 @@ code {
   }
   
   &:hover:not(:disabled) {
-    background-color: rgba(255, 255, 255, 0.05);
+    background-color: hsl(var(--secondary));
   }
 }
 
@@ -703,7 +717,7 @@ code {
   
   &:focus {
     @apply outline-none border-primary bg-surface;
-    box-shadow: 0 0 0 3px rgba(108, 99, 255, 0.1);
+    box-shadow: 0 0 0 3px rgba(36, 88, 211, 0.1);
   }
   
   &:disabled {
@@ -723,7 +737,7 @@ code {
   
   &:focus {
     @apply outline-none border-primary bg-surface;
-    box-shadow: 0 0 0 3px rgba(108, 99, 255, 0.1);
+    box-shadow: 0 0 0 3px rgba(36, 88, 211, 0.1);
   }
   
   &:disabled {
@@ -852,13 +866,13 @@ code {
 
 @keyframes glowPulse {
   0% {
-    box-shadow: 0 0 10px rgba(108, 99, 255, 0.3);
+    box-shadow: 0 0 10px rgba(36, 88, 211, 0.3);
   }
   50% {
-    box-shadow: 0 0 20px rgba(108, 99, 255, 0.6);
+    box-shadow: 0 0 20px rgba(36, 88, 211, 0.6);
   }
   100% {
-    box-shadow: 0 0 10px rgba(108, 99, 255, 0.3);
+    box-shadow: 0 0 10px rgba(36, 88, 211, 0.3);
   }
 }
 

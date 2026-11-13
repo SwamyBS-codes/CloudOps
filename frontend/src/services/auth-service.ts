@@ -54,6 +54,18 @@ export const deploymentService = {
   cancel: (id: string) =>
     apiClient.post(generateEndpoint(ENDPOINTS.DEPLOYMENTS.CANCEL, { id })),
 
+  stop: (id: string) =>
+    apiClient.post(`/api/deployments/${encodeURIComponent(id)}/stop`),
+
+  start: (id: string) =>
+    apiClient.post(`/api/deployments/${encodeURIComponent(id)}/start`),
+
+  restart: (id: string) =>
+    apiClient.post(`/api/deployments/${encodeURIComponent(id)}/restart`),
+
+  terminateAzureDeployment: (id: string) =>
+    apiClient.delete(generateEndpoint(ENDPOINTS.DEPLOYMENTS.DELETE, { id })),
+
   rollback: (id: string) =>
     apiClient.post(generateEndpoint(ENDPOINTS.DEPLOYMENTS.ROLLBACK, { id })),
   // Terminate an AWS deployment (deletes EC2 instance and optionally ECR/S3)
@@ -61,6 +73,27 @@ export const deploymentService = {
     const payload = { data: { ...data, cleanupECR: data?.cleanupECR !== false } };
     return apiClient.delete(`/api/aws/deployments/${instanceId}`, payload);
   },
+};
+
+/**
+ * Project Service
+ * Handles project and environment variables API calls
+ */
+export const projectService = {
+  getAll: () =>
+    apiClient.get(ENDPOINTS.PROJECTS.LIST),
+
+  getById: (id: string) =>
+    apiClient.get(generateEndpoint(ENDPOINTS.PROJECTS.GET, { id })),
+
+  update: (id: string, data: any) =>
+    apiClient.put(generateEndpoint(ENDPOINTS.PROJECTS.UPDATE, { id }), data),
+
+  addEnvVariable: (id: string, variable: { key: string; value: string; encrypted?: boolean }) =>
+    apiClient.post(`/api/projects/${encodeURIComponent(id)}/env`, variable),
+
+  deleteEnvVariable: (id: string, key: string) =>
+    apiClient.delete(`/api/projects/${encodeURIComponent(id)}/env/${encodeURIComponent(key)}`),
 };
 
 /**

@@ -41,8 +41,8 @@ type Props = {
   primaryRoot: string;
   onPrimaryRootChange: (root: string) => void;
   onDeploying: () => void;
+  onDeploymentQueued: () => void;
   onDeploymentStarted?: (deploymentId: string) => void;
-  onComplete: (url: string, deploymentId?: string) => void;
   onError: () => void;
   addLog: (text: string, type?: string) => void;
   socketRef: React.RefObject<Socket | null>;
@@ -58,23 +58,25 @@ export default function ApplicationDeployPanel({
   primaryRoot,
   onPrimaryRootChange,
   onDeploying,
+  onDeploymentQueued,
   onDeploymentStarted,
-  onComplete,
   onError,
   addLog,
   socketRef,
 }: Props) {
   const [applicationType, setApplicationType] = useState<ApplicationType>(scan.applicationType);
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const [envVars, setEnvVars] = useState<EnvVar[]>([
+  const [envVars, setEnvVars] = useState<EnvVar[]>(() => [
     { id: 1, key: 'NODE_ENV', value: 'production' },
-    { id: 2, key: 'VITE_API_URL', value: API_BASE_URL },
+    ...(scan.applicationType === 'frontend-website' ? [{ id: 2, key: 'VITE_API_URL', value: API_BASE_URL }] : []),
   ]);
   const [isDeploying, setIsDeploying] = useState(false);
+  const [envError, setEnvError] = useState<string | null>(null);
 
   const recommendation = scan.recommendation;
   const selectedLabel = APPLICATION_TYPE_LABELS[applicationType];
-  const SelectedIcon = TYPE_ICONS[applicationType];
+  const DetectedIcon = TYPE_ICONS[scan.applicationType];
+  const detectedLabel = APPLICATION_TYPE_LABELS[scan.applicationType];
 
   const estimatedCost = recommendation?.estimatedCostMonthlyUsd ?? 0;
   const estimatedMinutes = recommendation?.estimatedDeployMinutes ?? 5;
@@ -84,55 +86,39 @@ export default function ApplicationDeployPanel({
     setEnvVars((c) => c.map((v) => (v.id === id ? { ...v, [field]: val } : v)));
   const removeEnvVar = (id: number) => setEnvVars((c) => c.filter((v) => v.id !== id));
 
+  const getEnvironmentVariables = () => {
+    const populated = envVars.filter((variable) => variable.key.trim() || variable.value.trim());
+    const invalidKey = populated.find((variable) => !/^[A-Za-z_][A-Za-z0-9_]*$/.test(variable.key.trim()));
+    if (invalidKey) {
+      setEnvError('Use a valid variable name (letters, numbers, and underscores; it cannot start with a number).');
+      return null;
+    }
+
+    const keys = populated.map((variable) => variable.key.trim());
+    if (new Set(keys).size !== keys.length) {
+      setEnvError('Variable names must be unique.');
+      return null;
+    }
+
+    setEnvError(null);
+    return populated.reduce<Record<string, string>>((acc, variable) => {
+      acc[variable.key.trim()] = variable.value;
+      return acc;
+    }, {});
+  };
+
   const handleDeploy = async () => {
+    const environmentVariables = getEnvironmentVariables();
+    if (!environmentVariables) return;
+
     setIsDeploying(true);
     onDeploying();
     addLog(`Deploying ${selectedLabel}...`, 'system');
 
-    // Room join happens after deploymentId is returned from the API.
-
-    const environmentVariables = envVars
-      .filter((v) => v.key.trim())
-      .reduce<Record<string, string>>((acc, v) => {
-        acc[v.key.trim()] = v.value;
-        return acc;
-      }, {});
-
-    const onCompleteEvent = (data: {
-      status?: string;
-      publicUrl?: string;
-      liveUrl?: string;
-      publicIp?: string;
-      deploymentId?: string;
-      error?: string;
-    }) => {
-      const url = data.publicUrl || data.liveUrl;
-      if (data.status === 'success' && url) {
-        addLog(`Live at ${url}`, 'success');
-        if (data.publicIp) {
-          addLog(`Public IP: ${data.publicIp}`, 'success');
-        }
-        onComplete(url, data.deploymentId);
-      } else if (data.status === 'failed') {
-        addLog(data.error || 'Deployment failed', 'error');
-        if (data.deploymentId) {
-          addLog(`View details: /deployments/${data.deploymentId}`, 'info');
-        }
-        onError();
-      }
-      socketRef.current?.off('build-complete', onCompleteEvent);
-      socketRef.current?.off('deployment-complete', onCompleteEvent);
-      setIsDeploying(false);
-    };
-
-    socketRef.current?.on('build-complete', onCompleteEvent);
-    socketRef.current?.on('deployment-complete', onCompleteEvent);
-
     try {
-      if (applicationType === 'frontend-website' && envVars.some((v) => v.key.trim())) {
-        const envContent = envVars
-          .filter((v) => v.key.trim())
-          .map((v) => `${v.key.trim()}=${v.value}`)
+      if (applicationType === 'frontend-website' && Object.keys(environmentVariables).length > 0) {
+        const envContent = Object.entries(environmentVariables)
+          .map(([key, value]) => `${key}=${value}`)
           .join('\n');
         await deploymentService.saveFiles({
           clonePath,
@@ -157,82 +143,84 @@ export default function ApplicationDeployPanel({
         socketId: socketRef.current?.id,
       });
 
+      onDeploymentQueued();
       addLog('Deployment queued successfully', 'success');
       if (result.deploymentId) {
         addLog(`Deployment ID: ${result.deploymentId}`, 'info');
         socketRef.current?.emit('join-deployment', `deployment:${result.deploymentId}`);
         onDeploymentStarted?.(result.deploymentId);
       }
-
-      if (result.deploymentId && applicationType !== 'frontend-website') {
-        return;
-      }
-
-      if (result.publicUrl) {
-        onComplete(result.publicUrl, result.deploymentId);
-        setIsDeploying(false);
-      }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Deployment failed';
       addLog(message, 'error');
       onError();
       setIsDeploying(false);
-      socketRef.current?.off('build-complete', onCompleteEvent);
-      socketRef.current?.off('deployment-complete', onCompleteEvent);
     }
   };
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-2 text-sm text-emerald-300">
-        <Sparkles className="h-4 w-4" />
-        <span>CloudOps detected your application</span>
+      <div className="flex items-center justify-between gap-3">
+        <div data-setup-section="runtime">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-neutral-500">Deployment setup</p>
+          <h2 className="mt-1 text-base font-semibold text-white">Choose how to run this project</h2>
+        </div>
+        <span className="inline-flex shrink-0 items-center gap-1.5 border border-emerald-400/20 bg-emerald-400/[0.06] px-2 py-1 text-[10px] font-medium uppercase tracking-wide text-emerald-300">
+          <Sparkles className="h-3 w-3" />
+          {Math.round((scan.confidence || 0) * 100)}% match
+        </span>
       </div>
 
       {/* Detected type card */}
-      <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/10 p-4">
+      <div data-setup-section="hosting" className="scroll-mt-20 border-l-2 border-emerald-400 bg-[#111111] px-3 py-3">
         <div className="flex items-start gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-500/20">
-            <SelectedIcon className="h-5 w-5 text-emerald-300" />
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center border border-emerald-400/20 bg-emerald-400/[0.06]">
+            <DetectedIcon className="h-4 w-4 text-emerald-300" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-xs uppercase tracking-wider text-emerald-300/70">Recommended</p>
-            <h3 className="text-base font-semibold text-white">{selectedLabel}</h3>
-            <p className="mt-1 text-xs text-white/60">
-              {APPLICATION_TYPE_DESCRIPTIONS[applicationType]}
+            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-emerald-300">Recommended configuration</p>
+            <h3 className="mt-0.5 text-sm font-semibold text-white">{detectedLabel}</h3>
+            <p className="mt-1 text-[11px] leading-4 text-neutral-400">
+              {APPLICATION_TYPE_DESCRIPTIONS[scan.applicationType]}
             </p>
             {scan.detectedFrameworks.length > 0 && (
-              <p className="mt-2 text-xs text-white/50">
-                Detected: {scan.detectedFrameworks.join(', ')}
+              <p className="mt-1.5 truncate font-mono text-[10px] text-neutral-500" title={scan.detectedFrameworks.join(', ')}>
+                STACK / {scan.detectedFrameworks.join(' · ')}
               </p>
             )}
           </div>
         </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-2">
-          <div className="rounded-lg bg-black/30 px-3 py-2">
-            <div className="flex items-center gap-1.5 text-xs text-white/50">
+        <div className="mt-3 grid grid-cols-2 border-t border-white/[0.07] pt-3">
+          <div className="px-1">
+            <div className="flex items-center gap-1.5 text-[10px] text-neutral-500">
               <DollarSign className="h-3.5 w-3.5" /> Est. monthly cost
             </div>
-            <p className="mt-1 text-sm font-medium text-white">~${estimatedCost}/mo</p>
+            <p className="mt-1 font-mono text-sm font-semibold text-neutral-100">~${estimatedCost}<span className="ml-1 text-[10px] font-normal text-neutral-500">/mo</span></p>
           </div>
-          <div className="rounded-lg bg-black/30 px-3 py-2">
-            <div className="flex items-center gap-1.5 text-xs text-white/50">
+          <div className="border-l border-white/[0.07] px-3">
+            <div className="flex items-center gap-1.5 text-[10px] text-neutral-500">
               <Clock className="h-3.5 w-3.5" /> Est. deploy time
             </div>
-            <p className="mt-1 text-sm font-medium text-white">~{estimatedMinutes} min</p>
+            <p className="mt-1 font-mono text-sm font-semibold text-neutral-100">~{estimatedMinutes}<span className="ml-1 text-[10px] font-normal text-neutral-500">min</span></p>
           </div>
         </div>
 
-        <p className="mt-3 text-xs text-emerald-200/80">
+        <p className="mt-2 text-[10px] leading-4 text-neutral-500">
           {recommendation?.userFacingSummary || 'Optimized hosting selected for your app'}
         </p>
       </div>
 
       {/* Override application type */}
       <div>
-        <label className="mb-2 block text-xs font-medium text-white/60">Application type</label>
-        <div className="grid gap-2">
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <label className="block text-xs font-medium text-neutral-300">Application type</label>
+          <span className="text-[10px] text-neutral-600">Select a deployment target</span>
+        </div>
+        <div
+          className="grid gap-2"
+          style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 145px), 1fr))' }}
+        >
           {(Object.keys(APPLICATION_TYPE_LABELS) as ApplicationType[]).map((type) => {
             const Icon = TYPE_ICONS[type];
             const isSelected = applicationType === type;
@@ -241,16 +229,21 @@ export default function ApplicationDeployPanel({
                 key={type}
                 type="button"
                 onClick={() => setApplicationType(type)}
-                className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 text-left text-sm transition ${
+                aria-pressed={isSelected}
+                title={APPLICATION_TYPE_DESCRIPTIONS[type]}
+                className={`flex min-h-[112px] min-w-0 w-full flex-col items-start gap-2 border px-3 py-3 text-left transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400 ${
                   isSelected
-                    ? 'border-emerald-500/50 bg-emerald-500/15 text-white'
-                    : 'border-white/10 bg-black/20 text-white/70 hover:border-white/25'
+                    ? 'border-emerald-400/60 bg-emerald-400/[0.07] text-white'
+                    : 'border-white/10 bg-[#111111] text-neutral-400 hover:border-white/25 hover:text-neutral-200'
                 }`}
               >
-                <Icon className="h-4 w-4 shrink-0" />
-                <div>
-                  <div className="font-medium">{APPLICATION_TYPE_LABELS[type]}</div>
-                  <div className="text-xs opacity-70">{APPLICATION_TYPE_DESCRIPTIONS[type]}</div>
+                <span className="flex w-full items-center justify-between gap-1">
+                  <Icon className={`h-4 w-4 shrink-0 ${isSelected ? 'text-emerald-300' : 'text-neutral-500'}`} />
+                  {isSelected && <span className="h-1.5 w-1.5 bg-emerald-300" />}
+                </span>
+                <div className="min-w-0 w-full">
+                  <div className="break-words text-xs font-semibold leading-4">{APPLICATION_TYPE_LABELS[type]}</div>
+                  <div className="mt-1 break-words text-[10px] leading-4 text-neutral-500">{APPLICATION_TYPE_DESCRIPTIONS[type]}</div>
                 </div>
               </button>
             );
@@ -259,13 +252,13 @@ export default function ApplicationDeployPanel({
       </div>
 
       {/* Root directory for frontend */}
-      {applicationType === 'frontend-website' && scan.suggestedRoots.length > 1 && (
+      {scan.suggestedRoots.length > 1 && (
         <div>
-          <label className="mb-2 block text-xs font-medium text-white/60">Project folder</label>
+          <label className="mb-2 block text-xs font-medium text-neutral-300">Project root</label>
           <select
             value={primaryRoot}
             onChange={(e) => onPrimaryRootChange(e.target.value)}
-            className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-xs focus:border-emerald-500/50 outline-none"
+            className="w-full border border-white/10 bg-[#111111] px-3 py-2 text-xs text-neutral-200 outline-none transition focus:border-emerald-400/60"
           >
             {scan.suggestedRoots.map((root) => (
               <option key={root.path} value={root.path}>
@@ -277,32 +270,47 @@ export default function ApplicationDeployPanel({
       )}
 
       {/* Env vars for frontend builds */}
-      {applicationType === 'frontend-website' && (
-        <div>
-          <label className="mb-2 block text-xs font-medium text-white/60">
-            Build environment variables
+      <div data-setup-section="environment" className="scroll-mt-20 border border-white/[0.07] bg-[#0A0A0A] p-3">
+          <div className="mb-3">
+          <label className="mb-2 block text-xs font-medium text-neutral-300">
+            Environment variables
           </label>
-          <div className="max-h-32 space-y-2 overflow-y-auto">
+          <p className="text-[10px] leading-4 text-neutral-500">
+            {applicationType === 'frontend-website'
+              ? 'These values are supplied to the frontend build and embedded in its output.'
+              : 'These values are passed to the deployment runtime. Do not include secrets in frontend builds.'}
+          </p>
+          </div>
+          <div className="max-h-48 space-y-2 overflow-y-auto">
             {envVars.map((v) => (
-              <div key={v.id} className="flex gap-2">
+              <div key={v.id} className="grid min-w-0 grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)_32px] gap-2">
                 <input
                   type="text"
                   value={v.key}
-                  onChange={(e) => updateEnvVar(v.id, 'key', e.target.value)}
-                  placeholder="VITE_API_URL"
-                  className="flex-1 rounded-lg border border-white/10 bg-black/40 px-2 py-1.5 text-xs font-mono outline-none focus:border-emerald-500/50"
+                  onChange={(e) => {
+                    updateEnvVar(v.id, 'key', e.target.value);
+                    setEnvError(null);
+                  }}
+                  aria-label={`Variable name ${v.id}`}
+                  placeholder="VARIABLE_NAME"
+                  className="min-w-0 w-full border border-white/10 bg-[#111111] px-2 py-2 text-[11px] font-mono text-neutral-200 outline-none focus:border-emerald-400/60"
                 />
                 <input
                   type="text"
                   value={v.value}
-                  onChange={(e) => updateEnvVar(v.id, 'value', e.target.value)}
+                  onChange={(e) => {
+                    updateEnvVar(v.id, 'value', e.target.value);
+                    setEnvError(null);
+                  }}
+                  aria-label={`Value for ${v.key || `variable ${v.id}`}`}
                   placeholder="value"
-                  className="flex-1 rounded-lg border border-white/10 bg-black/40 px-2 py-1.5 text-xs font-mono outline-none focus:border-emerald-500/50"
+                  className="min-w-0 w-full border border-white/10 bg-[#111111] px-2 py-2 text-[11px] font-mono text-neutral-200 outline-none focus:border-emerald-400/60"
                 />
                 <button
                   type="button"
                   onClick={() => removeEnvVar(v.id)}
-                  className="text-white/40 hover:text-red-400"
+                  aria-label={`Remove ${v.key || `variable ${v.id}`}`}
+                  className="flex h-9 w-8 items-center justify-center border border-white/[0.07] text-neutral-500 hover:border-destructive/40 hover:text-destructive"
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
@@ -312,33 +320,59 @@ export default function ApplicationDeployPanel({
           <button
             type="button"
             onClick={addEnvVar}
-            className="mt-2 flex items-center gap-1 text-xs text-white/50 hover:text-white"
+            className="mt-3 flex items-center gap-1 border border-white/10 px-2.5 py-2 text-xs text-neutral-300 hover:border-white/25 hover:text-white"
           >
             <Plus className="h-3.5 w-3.5" /> Add variable
           </button>
-        </div>
-      )}
+          {envError && <p role="alert" className="mt-2 text-xs text-red-300">{envError}</p>}
+      </div>
 
-      <button
-        type="button"
-        onClick={handleDeploy}
-        disabled={isDeploying}
-        className="w-full rounded-lg bg-emerald-500/25 py-2.5 text-sm font-semibold text-emerald-200 transition hover:bg-emerald-500/35 disabled:opacity-50"
-      >
-        {isDeploying ? 'Deploying...' : `Deploy ${selectedLabel}`}
-      </button>
+      <div data-setup-section="review" className="scroll-mt-20 border border-white/[0.07] bg-[#0A0A0A] p-3">
+        <h3 className="text-[10px] font-semibold uppercase tracking-[0.15em] text-neutral-500">Review before deploying</h3>
+        <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-2 text-[11px]">
+          <div className="min-w-0">
+            <dt className="text-neutral-600">Repository</dt>
+            <dd className="truncate font-mono text-neutral-200" title={`${repositoryOwner || ''}/${repositoryName}`}>
+              {repositoryOwner ? `${repositoryOwner}/` : ''}{repositoryName}
+            </dd>
+          </div>
+          <div className="min-w-0">
+            <dt className="text-neutral-600">Application</dt>
+            <dd className="truncate text-neutral-200">{selectedLabel}</dd>
+          </div>
+          <div className="min-w-0">
+            <dt className="text-neutral-600">Project root</dt>
+            <dd className="truncate font-mono text-neutral-200">{primaryRoot}</dd>
+          </div>
+          <div className="min-w-0">
+            <dt className="text-neutral-600">Variables</dt>
+            <dd className="truncate text-neutral-200">
+              {envVars.filter((variable) => variable.key.trim()).length} configured
+            </dd>
+          </div>
+        </dl>
+        <button
+          data-setup-section="review-action"
+          type="button"
+          onClick={handleDeploy}
+          disabled={isDeploying}
+          className="mt-3 w-full border border-emerald-400/40 bg-emerald-400/[0.08] py-3 text-sm font-semibold text-emerald-300 transition hover:border-emerald-300 hover:bg-emerald-400/[0.14] disabled:cursor-wait disabled:opacity-50"
+        >
+          {isDeploying ? 'Deploying...' : `Deploy ${selectedLabel}`}
+        </button>
+      </div>
 
       <button
         type="button"
         onClick={() => setShowAdvanced(!showAdvanced)}
-        className="flex w-full items-center justify-center gap-1 text-xs text-white/40 hover:text-white/60"
+        className="flex w-full items-center justify-center gap-1 border-t border-white/[0.07] pt-3 text-xs text-neutral-500 hover:text-neutral-200"
       >
         {showAdvanced ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
         Advanced settings
       </button>
 
       {showAdvanced && (
-        <div className="rounded-lg border border-white/10 bg-black/30 p-3 text-xs text-white/50">
+        <div className="border border-white/10 bg-[#111111] p-3 text-xs text-neutral-400">
           Infrastructure is managed automatically. CloudOps maps your application type to the best
           hosting option. Contact your administrator to override provider settings.
         </div>

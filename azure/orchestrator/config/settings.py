@@ -7,8 +7,8 @@ import os
 from pathlib import Path
 
 # Project root
-PROJECT_ROOT = Path(__file__).parent.parent.parent
-ORCHESTRATOR_ROOT = PROJECT_ROOT / "azure" / "orchestrator"
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+ORCHESTRATOR_ROOT = Path(__file__).resolve().parent.parent
 
 # Azure Configuration
 AZURE_SUBSCRIPTION_ID = os.getenv("AZURE_SUBSCRIPTION_ID", "")

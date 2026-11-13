@@ -9,14 +9,14 @@
 
 ### Navbar
 
-Modern SaaS navbar with glassmorphism, animations, and mobile support.
+Square-corner navigation with clear active states and mobile support.
 
 #### Features
-- ✨ Glassmorphism background with blur effect
+- ▪ Flat surfaces with quiet borders
 - 🎯 Sticky positioning with scroll effects
 - 📱 Fully responsive mobile menu
 - ✅ Smooth hover animations
-- 🎨 Animated underline for nav links
+- 🎨 Cobalt active and hover states
 - 🌐 GitHub OAuth login button
 - ♿ Accessibility support
 - ⚡ Framer Motion animations
@@ -50,7 +50,7 @@ The Navbar component is self-contained and doesn't require props. It:
 The navbar uses:
 - **Design Tokens**: CSS variables from `src/styles/tokens.css`
 - **Tailwind CSS**: For responsive utilities
-- **CSS Custom Styles**: `Navbar.css` for complex animations
+- **CSS Custom Styles**: shared design tokens for color and geometry
 - **Framer Motion**: For smooth transitions
 
 #### Customization

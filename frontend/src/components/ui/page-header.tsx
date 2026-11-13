@@ -50,11 +50,11 @@ export function EmptyState({ icon: Icon, title, description, action, className }
       initial={{ opacity: 0, scale: 0.98 }}
       animate={{ opacity: 1, scale: 1 }}
       className={cn(
-        'flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-card/50 px-6 py-16 text-center',
+        'flex flex-col items-center justify-center border border-dashed border-border bg-card/50 px-6 py-16 text-center',
         className
       )}
     >
-      <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-secondary">
+      <div className="mb-4 flex h-14 w-14 items-center justify-center border border-border bg-secondary">
         <Icon className="h-7 w-7 text-muted-foreground" aria-hidden />
       </div>
       <h3 className="font-display text-lg font-semibold text-foreground">{title}</h3>
@@ -122,14 +122,14 @@ export function Progress({ value, max = 100, className, showLabel, variant = 'de
         </div>
       )}
       <div
-        className="h-2 w-full overflow-hidden rounded-full bg-secondary"
+        className="h-2 w-full overflow-hidden bg-secondary"
         role="progressbar"
         aria-valuenow={value}
         aria-valuemin={0}
         aria-valuemax={max}
       >
         <motion.div
-          className={cn('h-full rounded-full', barColors[variant])}
+          className={cn('h-full', barColors[variant])}
           initial={{ width: 0 }}
           animate={{ width: `${pct}%` }}
           transition={{ duration: 0.6, ease: 'easeOut' }}

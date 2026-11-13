@@ -71,7 +71,7 @@ const DeploymentSchema = new mongoose.Schema(
     // Framework detection
     framework: {
       type: String,
-      enum: ['nodejs', 'python', 'java', 'go', 'ruby', 'php', 'rust', 'dotnet', 'static', 'custom'],
+      enum: ['nodejs', 'node', 'python', 'java', 'go', 'ruby', 'php', 'rust', 'dotnet', 'static', 'custom', 'generic'],
     },
     frameworkVersion: String,
     frameworkDetails: mongoose.Schema.Types.Mixed,
@@ -86,8 +86,8 @@ const DeploymentSchema = new mongoose.Schema(
     // Deployment service type (AWS or Azure)
     deploymentService: {
       type: String,
-      enum: ['local', 'aws', 'azure', 's3-static'],
-      default: 'aws',
+      enum: ['local', 'aws', 'azure', 's3-static', 'azure-static'],
+      default: 'azure',
       index: true,
     },
 
@@ -96,11 +96,11 @@ const DeploymentSchema = new mongoose.Schema(
       type: {
         provider: {
           type: String,
-          default: 'aws',
+          default: 'azure',
         },
         targetType: {
           type: String,
-          enum: ['local', 'ssh', 'aws', 'azure', 's3-static'],
+          enum: ['local', 'ssh', 'aws', 'azure', 's3-static', 'azure-static'],
         },
         s3: {
           bucket: { type: String, default: null },
@@ -235,7 +235,7 @@ const DeploymentSchema = new mongoose.Schema(
       timestamp: Date,
       source: {
         type: String,
-        enum: ['system', 'git', 'framework', 'docker', 'aws', 'ecr', 'ecs', 'route53', 'azure', 'acr', 'aci', 'app'],
+        enum: ['system', 'git', 'framework', 'docker', 'aws', 'ecr', 'ecs', 'route53', 'azure', 'acr', 'aci', 'app', 'storage', 'kaniko'],
       },
       level: {
         type: String,
@@ -244,7 +244,7 @@ const DeploymentSchema = new mongoose.Schema(
       message: String,
       deploymentService: {
         type: String,
-        enum: ['local', 'aws', 'azure', 's3-static'],
+        enum: ['local', 'aws', 'azure', 's3-static', 'azure-static'],
       },
       data: mongoose.Schema.Types.Mixed,
     }],
@@ -268,7 +268,7 @@ const DeploymentSchema = new mongoose.Schema(
       timestamp: Date,
       source: {
         type: String,
-        enum: ['system', 'git', 'framework', 'docker', 'azure', 'acr', 'aci', 'app'],
+        enum: ['system', 'git', 'framework', 'docker', 'azure', 'acr', 'aci', 'app', 'storage', 'kaniko'],
       },
       level: {
         type: String,

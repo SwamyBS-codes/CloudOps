@@ -9,10 +9,7 @@ import {
   TrendingUp,
   ArrowRight,
   Github,
-  Plus,
-  Loader2,
 } from 'lucide-react';
-import { DashboardLayout } from '@/components/layout';
 import {
   PageHeader,
   Card,
@@ -53,29 +50,28 @@ export default function DashboardPage() {
     refetchInterval: 30000,
   });
 
-  // Calculate stats from real data
+  // Calculate stats from real data (resets when the list becomes empty)
   useEffect(() => {
-    if (allDeployments && allDeployments.length > 0) {
-      const successful = allDeployments.filter(d => d.status === 'success').length;
-      const active = allDeployments.filter(d => d.status === 'building' || d.status === 'deploying' || d.status === 'pending').length;
-      const failed = allDeployments.filter(d => d.status === 'failed').length;
-      
-      const completedWithTime = allDeployments
-        .filter(d => d.totalTime && d.status === 'success')
-        .map(d => d.totalTime || 0);
-      
-      const avgTime = completedWithTime.length > 0
-        ? completedWithTime.reduce((a, b) => a + b, 0) / completedWithTime.length
-        : 0;
+    const deployments = allDeployments || [];
+    const successful = deployments.filter(d => d.status === 'success').length;
+    const active = deployments.filter(d => d.status === 'building' || d.status === 'deploying' || d.status === 'pending').length;
+    const failed = deployments.filter(d => d.status === 'failed').length;
 
-      setDeploymentStats({
-        total: allDeployments.length,
-        success: successful,
-        active: active,
-        failed: failed,
-        avgTime: avgTime,
-      });
-    }
+    const completedWithTime = deployments
+      .filter(d => d.totalTime && d.status === 'success')
+      .map(d => d.totalTime || 0);
+
+    const avgTime = completedWithTime.length > 0
+      ? completedWithTime.reduce((a, b) => a + b, 0) / completedWithTime.length
+      : 0;
+
+    setDeploymentStats({
+      total: deployments.length,
+      success: successful,
+      active: active,
+      failed: failed,
+      avgTime: avgTime,
+    });
   }, [allDeployments]);
 
   const formatDuration = (ms?: number) => {
@@ -97,33 +93,33 @@ export default function DashboardPage() {
       label: 'Total Deployments',
       value: String(deploymentStats.total),
       description: 'All time',
-      color: 'from-blue-500 to-cyan-500',
+      tone: 'primary',
     },
     {
       icon: CheckCircle2,
       label: 'Success Rate',
       value: `${successRate}%`,
       description: 'Successful',
-      color: 'from-emerald-500 to-teal-500',
+      tone: 'success',
     },
     {
       icon: Activity,
       label: 'Active',
       value: String(deploymentStats.active),
       description: 'In progress',
-      color: 'from-amber-500 to-orange-500',
+      tone: 'warning',
     },
     {
       icon: Clock3,
       label: 'Avg Time',
       value: formatDuration(deploymentStats.avgTime),
       description: 'Deployment',
-      color: 'from-purple-500 to-pink-500',
+      tone: 'neutral',
     },
   ];
 
   return (
-    <DashboardLayout>
+    <>
       <PageHeader
         title="Dashboard"
         description="Real-time deployment metrics and repository management."
@@ -138,6 +134,10 @@ export default function DashboardPage() {
       />
 
       {/* Metrics Grid */}
+      <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+        <span className="h-2 w-2 bg-primary" aria-hidden />
+        Deployment overview
+      </div>
       <div className="mb-12 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {stats.map((stat, index) => {
           const Icon = stat.icon;
@@ -148,18 +148,22 @@ export default function DashboardPage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.08 }}
             >
-              <Card className="group border-border/60 bg-gradient-to-br p-6 transition-all hover:border-primary/30 hover:shadow-glow"
-                style={{
-                  backgroundImage: `linear-gradient(to bottom right, rgba(var(--${stat.color.split('-')[1]}-500)), rgba(var(--${stat.color.split('-')[3]}-500)))`
-                }}
-              >
+              <Card className={`group border-t-2 p-5 transition-colors hover:border-primary ${
+                stat.tone === 'success'
+                  ? 'border-t-success'
+                  : stat.tone === 'warning'
+                    ? 'border-t-warning'
+                    : stat.tone === 'neutral'
+                      ? 'border-t-border'
+                      : 'border-t-primary'
+              }`}>
                 <div className="flex items-start justify-between">
                   <div>
-                    <p className="text-sm font-medium text-white/70">{stat.label}</p>
-                    <p className="mt-2 text-3xl font-bold text-white">{stat.value}</p>
-                    <p className="mt-1 text-xs text-white/60">{stat.description}</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{stat.label}</p>
+                    <p className="mt-3 font-mono text-3xl font-semibold tracking-tight text-foreground">{stat.value}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{stat.description}</p>
                   </div>
-                  <Icon className="h-8 w-8 opacity-20 text-white" />
+                  <Icon className="h-5 w-5 text-muted-foreground" aria-hidden />
                 </div>
               </Card>
             </motion.div>
@@ -174,18 +178,12 @@ export default function DashboardPage() {
             <div>
               <div className="flex items-center gap-2 mb-2">
                 <Github className="h-6 w-6 text-foreground" />
-                <h2 className="font-display text-2xl font-bold text-foreground">GitHub Repositories</h2>
+                <h2 className="font-display text-xl font-semibold text-foreground">GitHub repositories</h2>
               </div>
               <p className="text-sm text-muted-foreground">
                 Connect your GitHub repositories to deploy with CloudOps.
               </p>
             </div>
-            <Link to="/deploy">
-              <Button size="sm" className="gap-2">
-                <Plus className="h-4 w-4" />
-                Connect Repository
-              </Button>
-            </Link>
           </div>
 
           <Suspense
@@ -211,6 +209,6 @@ export default function DashboardPage() {
           </Suspense>
         </div>
       </section>
-    </DashboardLayout>
+    </>
   );
 }

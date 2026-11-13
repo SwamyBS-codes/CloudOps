@@ -1,4 +1,5 @@
 const deploymentEngine = require('../services/deploymentEngineService');
+const deploymentController = require('./deploymentController');
 const Deployment = require('../models/Deployment');
 
 const ACTIVE_STATUSES = ['queued', 'cloning', 'detecting', 'building', 'pushing', 'deploying', 'running'];
@@ -146,6 +147,11 @@ const getDeploymentStatus = async (req, res) => {
         });
     }
 };
+
+const cancelDeployment = (req, res) => deploymentController.cancelDeployment(req, res);
+const stopDeployment = (req, res) => deploymentController.stopDeployment(req, res);
+const startDeployment = (req, res) => deploymentController.startDeployment(req, res);
+const deleteDeployment = (req, res) => deploymentController.terminateDeployment(req, res);
 
 const getAnalyticsDashboard = async (req, res) => {
     try {
@@ -471,6 +477,10 @@ module.exports = {
     getDeploymentById,
     getDeploymentLogs,
     getDeploymentStatus,
+    cancelDeployment,
+    stopDeployment,
+    startDeployment,
+    deleteDeployment,
     getAnalyticsDashboard,
     getAnalyticsDeployments,
     getAnalyticsCosts,

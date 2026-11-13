@@ -58,7 +58,7 @@ export type FrameworkDetection = {
 };
 
 export const deploymentService = {
-  startBuild: async (data: { projectId?: string; repositoryName: string; repositoryOwner?: string }) => {
+  startBuild: async (data: { projectId?: string; repositoryName: string; repositoryOwner?: string; environmentVariables?: Record<string, string>; branch?: string }) => {
     try {
       const response = await axiosClient.post('/api/deploy/start-build', data);
       return response.data;
@@ -88,6 +88,7 @@ export const deploymentService = {
     repoUrl: string;
     appName: string;
     socketId?: string;
+    environmentVariables?: Record<string, string>;
   }) => {
     try {
       const response = await axiosClient.post('/api/azure/deploy', data);

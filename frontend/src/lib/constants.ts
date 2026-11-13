@@ -23,6 +23,10 @@ export const AUTH_TOKEN_KEY = 'cloudops_auth_token';
 export const AUTH_REFRESH_TOKEN_KEY = 'cloudops_refresh_token';
 export const USER_KEY = 'cloudops_user';
 
+// Local storage keys
+export const DEPLOYED_PROJECTS_STORAGE_KEY = 'cloudops_deployed_projects';
+export const CONNECTED_REPOSITORIES_STORAGE_KEY = 'cloudops_connected_repositories';
+
 // Routes
 export const ROUTES = {
   HOME: '/',
@@ -59,12 +63,12 @@ export const REFRESH_INTERVAL = 60000; // 1 minute
 
 // Colors
 export const COLORS = {
-  PRIMARY: '#6C63FF',
-  ACCENT: '#00D4FF',
-  SUCCESS: '#00C896',
-  ERROR: '#FF5D73',
-  WARNING: '#F59E0B',
-  INFO: '#00D4FF',
+  PRIMARY: '#2458D3',
+  ACCENT: '#218B60',
+  SUCCESS: '#218B60',
+  ERROR: '#D33B3B',
+  WARNING: '#B97812',
+  INFO: '#2458D3',
 };
 
 // Features

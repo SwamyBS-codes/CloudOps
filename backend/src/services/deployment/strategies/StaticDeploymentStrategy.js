@@ -1,6 +1,7 @@
 const path = require('path');
 const Deployment = require('../../../models/Deployment');
 const staticBuildService = require('../../staticBuildService');
+const azureStaticService = require('../../azureStaticService');
 const frameworkDetector = require('../../frameworkDetector');
 const { getMappingForApplicationType } = require('../../../config/deploymentMapping');
 const { pushDeploymentLog, updateDeploymentFields } = require('../../../utils/deploymentPersistence');
@@ -58,6 +59,9 @@ class StaticDeploymentStrategy {
       environmentVariables = {},
     } = input;
 
+    const isAzure = Boolean(process.env.AZURE_STORAGE_CONNECTION_STRING && (!process.env.AWS_S3_BUCKET_NAME || mapping.provider === 'azure'));
+    const targetProvider = isAzure ? 'azure' : 'aws';
+
     const deployment = new Deployment({
       ...(projectId && { projectId }),
       userId: String(userId || 'anonymous'),
@@ -66,8 +70,8 @@ class StaticDeploymentStrategy {
       applicationType,
       applicationName: applicationName || repositoryName,
       deploymentType: mapping.deploymentType,
-      provider: mapping.provider,
-      deploymentService: 's3-static',
+      provider: targetProvider,
+      deploymentService: isAzure ? 'azure-static' : 's3-static',
       status: 'building',
       phase: 'docker_build',
       branch: input.branch || 'main',
@@ -81,8 +85,8 @@ class StaticDeploymentStrategy {
       healthStatus: 'checking',
       startedAt: new Date(),
       infrastructure: {
-        provider: mapping.provider,
-        targetType: 's3-static',
+        provider: targetProvider,
+        targetType: isAzure ? 'azure-static' : 's3-static',
         deployState: 'building',
         s3: {},
         ecr: {},
@@ -93,7 +97,7 @@ class StaticDeploymentStrategy {
       },
       metadata: {
         rootDirectory,
-        userFacingSummary: mapping.userFacingSummary,
+        userFacingSummary: isAzure ? 'Azure Blob static website' : mapping.userFacingSummary,
         hideInfrastructure: true,
       },
     });
@@ -141,18 +145,23 @@ class StaticDeploymentStrategy {
         );
       }
 
-      const bucket = staticBuildService.getS3BucketName();
-      if (!bucket) {
-        throw new Error('AWS_S3_BUCKET_NAME is not configured in backend/.env');
-      }
-
-      await this.emit(io, deployment, `Verifying S3 access for bucket: ${bucket}...`, 'info', 'system');
-      await staticBuildService.verifyBucketAccess(
-        bucket,
-        (text, type) => this.emit(io, deployment, text, type, 'aws')
-      );
-
+      const isAzure = deployment.provider === 'azure';
       const siteSlug = staticBuildService.generateSiteSlug(repositoryName);
+
+      if (isAzure) {
+        await this.emit(io, deployment, 'Verifying Azure Blob Static Website storage...', 'info', 'azure');
+        await azureStaticService.verifyStaticHosting((text, type) => this.emit(io, deployment, text, type, 'azure'));
+      } else {
+        const bucket = staticBuildService.getS3BucketName();
+        if (!bucket) {
+          throw new Error('AWS_S3_BUCKET_NAME is not configured in backend/.env');
+        }
+        await this.emit(io, deployment, `Verifying S3 access for bucket: ${bucket}...`, 'info', 'system');
+        await staticBuildService.verifyBucketAccess(
+          bucket,
+          (text, type) => this.emit(io, deployment, text, type, 'aws')
+        );
+      }
 
       const detection = await frameworkDetector.detectFramework(clonePath, {
         rootDirectory,
@@ -180,14 +189,27 @@ class StaticDeploymentStrategy {
         await this.emit(io, deployment, 'Publishing static files...', 'info', 'app');
       }
 
-      const publicUrl = await staticBuildService.deployStaticToS3({
-        projectPath,
-        outputDirectory: finalOutputDir,
-        siteSlug,
-        skipAccessVerify: true,
-        onLog: (text, type) => this.emit(io, deployment, text, type, 'aws'),
-      });
-      const publicIp = await staticBuildService.resolvePublicIp(publicUrl);
+      let publicUrl;
+      let publicIp = null;
+
+      if (isAzure) {
+        const { absolute: outputPath } = await staticBuildService.resolveOutputDir(projectPath, finalOutputDir);
+        publicUrl = await azureStaticService.deployDirectory({
+          outputPath,
+          prefix: siteSlug,
+          onLog: (text, type) => this.emit(io, deployment, text, type, 'azure'),
+        });
+        publicIp = await staticBuildService.resolvePublicIp(publicUrl);
+      } else {
+        publicUrl = await staticBuildService.deployStaticToS3({
+          projectPath,
+          outputDirectory: finalOutputDir,
+          siteSlug,
+          skipAccessVerify: true,
+          onLog: (text, type) => this.emit(io, deployment, text, type, 'aws'),
+        });
+        publicIp = await staticBuildService.resolvePublicIp(publicUrl);
+      }
 
       const totalTime = Date.now() - deployment.startedAt.getTime();
 
@@ -199,13 +221,24 @@ class StaticDeploymentStrategy {
         healthStatus: 'healthy',
         completedAt: new Date(),
         totalTime,
-        'infrastructure.provider': 'aws',
-        'infrastructure.targetType': 's3-static',
-        'infrastructure.s3.bucket': staticBuildService.getS3BucketName(),
-        'infrastructure.s3.prefix': siteSlug,
-        'infrastructure.s3.siteSlug': siteSlug,
-        'infrastructure.s3.websiteUrl': publicUrl,
-        'infrastructure.s3.publicIp': publicIp || null,
+        'infrastructure.provider': isAzure ? 'azure' : 'aws',
+        'infrastructure.targetType': isAzure ? 'azure-static' : 's3-static',
+        ...(isAzure
+          ? {
+              'infrastructure.azure': {
+                container: '$web',
+                siteSlug,
+                websiteUrl: publicUrl,
+                publicIp: publicIp || null,
+              },
+            }
+          : {
+              'infrastructure.s3.bucket': staticBuildService.getS3BucketName(),
+              'infrastructure.s3.prefix': siteSlug,
+              'infrastructure.s3.siteSlug': siteSlug,
+              'infrastructure.s3.websiteUrl': publicUrl,
+              'infrastructure.s3.publicIp': publicIp || null,
+            }),
         'infrastructure.liveUrl': publicUrl,
         'infrastructure.deployState': 'live',
       });

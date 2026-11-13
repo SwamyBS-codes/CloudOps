@@ -106,12 +106,12 @@ const NavbarShowcase: React.FC = () => {
                   <motion.div
                     className="mb-4 inline-flex p-md rounded-lg"
                     style={{
-                      background: 'linear-gradient(135deg, rgba(108, 99, 255, 0.1), rgba(0, 212, 255, 0.05))',
+                      background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02))',
                       border: '1px solid var(--color-border)',
                     }}
                     whileHover={{ scale: 1.1, rotate: 5 }}
                   >
-                    <Icon size={28} color="#6C63FF" />
+                    <Icon size={28} color="#2458D3" />
                   </motion.div>
                   <h3 className="text-xl font-semibold mb-2">{feature.title}</h3>
                   <p className="text-text-secondary">{feature.description}</p>

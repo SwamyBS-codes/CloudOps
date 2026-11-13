@@ -15,6 +15,7 @@ const awsDeploymentEngine = require('./awsDeploymentEngineService');
 const ec2Service = require('./aws/ec2Service');
 const { pushDeploymentLog } = require('../utils/deploymentPersistence');
 const { maskSecrets, sanitizeData } = require('../utils/logSanitizer');
+const { getBuildDir } = require('../utils/pathResolver');
 
 class DeploymentEngineService {
   constructor() {
@@ -560,7 +561,7 @@ class DeploymentEngineService {
       console.log(`📍 Repository URL: ${deployment.repositoryUrl}\n`);
 
       startedAt = Date.now();
-      buildDir = path.join(os.tmpdir(), `cloudops-${deploymentId}`);
+      buildDir = getBuildDir(`cloudops-${deploymentId}`);
       await fs.mkdir(buildDir, { recursive: true });
 
       const target = this.normalizeTarget(deployment.metadata?.target || deployment.infrastructure?.target || {});
@@ -964,6 +965,7 @@ class DeploymentEngineService {
 
     return {
       deploymentId: deployment._id.toString(),
+      _id: deployment._id.toString(),
       projectId: deployment.projectId ? deployment.projectId.toString() : null,
       userId: deployment.userId,
       repositoryUrl: deployment.repositoryUrl,
@@ -973,6 +975,23 @@ class DeploymentEngineService {
       phase: deployment.phase,
       framework: deployment.framework,
       publicUrl: deployment.publicUrl,
+      domainUrl: deployment.domainUrl,
+      healthStatus: deployment.healthStatus,
+      applicationType: deployment.applicationType,
+      applicationName: deployment.applicationName,
+      deploymentService: deployment.deploymentService,
+      deploymentType: deployment.deploymentType,
+      provider: deployment.provider,
+      commitHash: deployment.commitHash,
+      commitShortHash: deployment.commitShortHash,
+      commitMessage: deployment.commitMessage,
+      commitAuthor: deployment.commitAuthor,
+      commitDate: deployment.commitDate,
+      dockerImageUri: deployment.dockerImageUri,
+      dockerImageTag: deployment.dockerImageTag,
+      dockerBuildTime: deployment.dockerBuildTime,
+      dockerImageSize: deployment.dockerImageSize,
+      buildTime: deployment.buildTime,
       logs: deployment.logs.slice(-100),
       infrastructure: deployment.infrastructure || {},
       metadata: deployment.metadata || {},
@@ -1020,6 +1039,39 @@ class DeploymentEngineService {
 
     logs.sort((a, b) => b.timestamp - a.timestamp);
     return logs.slice(skip, skip + limit);
+  }
+
+  async cancelQueuedDeployment(deploymentId, io = null) {
+    const deployment = await Deployment.findById(deploymentId);
+    if (!deployment) {
+      throw new Error('Deployment not found');
+    }
+
+    if (!['pending', 'queued'].includes(deployment.status)) {
+      throw new Error('Only deployments waiting in the queue can be cancelled');
+    }
+
+    const queueIndex = this.queue.findIndex((job) => job.deploymentId === String(deploymentId));
+    if (queueIndex < 0) {
+      throw new Error('Deployment has already started and can no longer be cancelled');
+    }
+
+    const [job] = this.queue.splice(queueIndex, 1);
+    deployment.updateStatus('cancelled', 'cleanup');
+    deployment.completedAt = new Date();
+    deployment.metadata = deployment.metadata || {};
+    deployment.metadata.queueState = 'cancelled';
+    deployment.addLog('system', 'info', 'Queued deployment cancelled by user');
+
+    try {
+      await deployment.save();
+    } catch (error) {
+      this.queue.splice(queueIndex, 0, job);
+      throw error;
+    }
+
+    this.emitLog(io, deployment, 'system', 'info', 'Queued deployment cancelled', {});
+    return { success: true, status: 'cancelled' };
   }
 
   async stopDeployment(deploymentId, io = null) {
@@ -1222,7 +1274,7 @@ class DeploymentEngineService {
 }
 
 function buildDirFromDeployment(deployment) {
-  return path.join(os.tmpdir(), `cloudops-${deployment._id.toString()}`);
+  return getBuildDir(`cloudops-${deployment._id.toString()}`);
 }
 
 module.exports = new DeploymentEngineService();
