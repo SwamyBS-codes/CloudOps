@@ -212,7 +212,7 @@ test.describe('Navbar E2E Tests', () => {
       const link = page.getByRole('link', { name: 'Features' }).first();
       
       // Initial state
-      let underlineVisible = await link.evaluate((el) => {
+      const underlineVisible = await link.evaluate((el) => {
         const pseudo = window.getComputedStyle(el, '::after');
         return pseudo.opacity;
       }).catch(() => '0');

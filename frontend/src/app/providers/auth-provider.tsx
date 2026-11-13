@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useCallback, useMemo, useEffect } from 'react';
 import { authService } from '@/services/auth-service';
+import { AUTH_TOKEN_KEY } from '@/lib/constants';
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -47,10 +48,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       if (credentials.token) {
         // Token from OAuth callback
-        localStorage.setItem('cloudops_auth_token', credentials.token);
+        localStorage.setItem(AUTH_TOKEN_KEY, credentials.token);
         const payload = decodeJWT(credentials.token);
         if (!payload) {
-          localStorage.removeItem('cloudops_auth_token');
+          localStorage.removeItem(AUTH_TOKEN_KEY);
           setIsAuthenticated(false);
           setUser(null);
           return false;
@@ -62,20 +63,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Regular login
         const response = await authService.login(credentials.email, credentials.password);
         if (!(response.data as any)?.token) {
-          localStorage.removeItem('cloudops_auth_token');
+          localStorage.removeItem(AUTH_TOKEN_KEY);
           setIsAuthenticated(false);
           setUser(null);
           return false;
         }
 
-        localStorage.setItem('cloudops_auth_token', (response.data as any).token);
+        localStorage.setItem(AUTH_TOKEN_KEY, (response.data as any).token);
         setIsAuthenticated(true);
         setUser((response.data as any).user);
         return true;
       }
     } catch (error) {
       console.error('Auth login failed:', error);
-      localStorage.removeItem('cloudops_auth_token');
+      localStorage.removeItem(AUTH_TOKEN_KEY);
       setIsAuthenticated(false);
       setUser(null);
       return false;
@@ -85,13 +86,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const logout = useCallback(() => {
-    localStorage.removeItem('cloudops_auth_token');
+    localStorage.removeItem(AUTH_TOKEN_KEY);
     setIsAuthenticated(false);
     setUser(null);
   }, []);
 
   const verifyAuth = useCallback(async () => {
-    const token = localStorage.getItem('cloudops_auth_token');
+    const token = localStorage.getItem(AUTH_TOKEN_KEY);
     if (token) {
       try {
         const response = await authService.verify();
@@ -99,7 +100,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(data.user || null);
         setIsAuthenticated(true);
       } catch (error) {
-        localStorage.removeItem('cloudops_auth_token');
+        localStorage.removeItem(AUTH_TOKEN_KEY);
         setIsAuthenticated(false);
         setUser(null);
       }

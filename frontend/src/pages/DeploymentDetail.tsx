@@ -13,6 +13,8 @@ import {
   Loader2,
 } from 'lucide-react';
 import { deploymentService } from '@/services/auth-service';
+import { resolveDeploymentProvider } from '@/lib/application-types';
+import { SOCKET_URL } from '@/lib/constants';
 import LiveProgressBar from '@/components/deployments/LiveProgressBar';
 import TerminalStream from '@/components/deployments/TerminalStream';
 import DeploymentTimeline from '@/components/deployments/DeploymentTimeline';
@@ -119,6 +121,7 @@ type DeploymentDetails = {
   applicationType?: string;
   applicationName?: string;
   deploymentService?: string;
+  provider?: string;
   domainUrl?: string;
   healthStatus?: string;
   error?: {
@@ -179,6 +182,7 @@ const statusStyles: Record<string, string> = {
   failed: 'bg-destructive/10 text-destructive border-destructive',
   cancelled: 'bg-secondary text-muted-foreground border-border',
   stopped: 'bg-secondary text-muted-foreground border-border',
+  closed: 'bg-secondary text-muted-foreground border-border',
 };
 
 const formatDate = (value?: string) => {
@@ -208,7 +212,11 @@ export default function DeploymentDetailPage() {
   const deploymentKey = deployment?._id || deployment?.deploymentId || '';
   const metadata = (deployment?.metadata || {}) as Record<string, any>;
   const infrastructure = (deployment?.infrastructure || metadata.infrastructure || {}) as NonNullable<DeploymentDetails['infrastructure']> & Record<string, any>;
-  const deploymentProvider = deployment?.deploymentService || infrastructure?.provider || 'aws';
+  const deploymentProvider = resolveDeploymentProvider({
+    deploymentService: deployment?.deploymentService,
+    provider: deployment?.provider,
+    infrastructure: { provider: infrastructure?.provider, targetType: infrastructure?.targetType },
+  });
   const targetType = infrastructure?.targetType || infrastructure?.target?.type || 'unknown';
   const commitHash = deployment?.commitShortHash || deployment?.commitHash || metadata?.repositoryInfo?.latestCommit?.shortHash || 'Unknown';
   const fullCommitHash = deployment?.commitHash || metadata?.repositoryInfo?.latestCommit?.hash || 'Unknown';
@@ -244,13 +252,11 @@ export default function DeploymentDetailPage() {
   const azureAciCpu = infrastructure?.aci?.cpu || 'Pending';
   const azureAciMemory = infrastructure?.aci?.memoryInGb || 'Pending';
   const isStaticDeployment =
-    deploymentProvider === 's3-static'
-    || infrastructure?.targetType === 's3-static'
+    deploymentProvider === 's3'
     || deployment?.applicationType === 'frontend-website';
   const isAwsDeployment =
-    !isStaticDeployment
-    && (deploymentProvider === 'aws' || infrastructure?.provider === 'aws' || infrastructure?.targetType === 'aws');
-  const isAzureDeployment = deploymentProvider === 'azure' || infrastructure?.provider === 'azure' || infrastructure?.targetType === 'azure';
+    !isStaticDeployment && deploymentProvider === 'aws';
+  const isAzureDeployment = !isStaticDeployment && deploymentProvider === 'azure';
   const activeSteps = isStaticDeployment ? STATIC_STEPS : DOCKER_STEPS;
   const activePhaseMap = isStaticDeployment ? staticPhaseToStep : phaseToStep;
   const s3Bucket = infrastructure?.s3?.bucket || 'Pending';
@@ -314,7 +320,7 @@ export default function DeploymentDetailPage() {
   useEffect(() => {
     if (!id) return;
 
-    const socketUrl = (import.meta.env.VITE_API_URL as string) || 'http://localhost:5000';
+    const socketUrl = SOCKET_URL;
     const socket = io(socketUrl, { autoConnect: true });
     const deploymentRoom = `deployment:${id}`;
 
@@ -451,44 +457,49 @@ export default function DeploymentDetailPage() {
 
   return (
     <>
-      <main className="space-y-8">
+      <main className="min-h-screen bg-[#070707] py-6">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <button
             type="button"
             onClick={() => navigate('/deployments')}
-            className="inline-flex items-center gap-2 rounded-xl border border-border bg-secondary px-3 py-2 text-sm text-foreground transition hover:bg-secondary"
+            className="inline-flex items-center gap-2 border border-white/10 bg-[#101010] px-3 py-2 text-xs font-medium text-neutral-300 transition hover:border-white/25 hover:text-white"
           >
             <ArrowLeft className="h-4 w-4" />
             Back to deployments
           </button>
 
           {error && (
-            <div className="mt-4 flex items-start gap-3 rounded-2xl border border-destructive bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            <div className="mt-4 flex items-start gap-3 border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
               <span>{error}</span>
             </div>
           )}
 
           {loading && !deployment ? (
-            <div className="mt-8 grid gap-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
-              <div className="h-[560px] animate-pulse rounded-3xl border border-border bg-secondary" />
-              <div className="h-[560px] animate-pulse rounded-3xl border border-border bg-secondary" />
+            <div className="mt-8 space-y-4">
+              <div className="h-48 animate-pulse border border-white/10 bg-[#101010]" />
+              <div className="h-[420px] animate-pulse border border-white/10 bg-[#0C0C0C]" />
             </div>
           ) : deployment ? (
-            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
-              <div className="min-w-0 space-y-6">
-                <div className="min-w-0 rounded-3xl border border-border bg-card p-5 ">
-                  <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="mt-5 space-y-4">
+              <div className="min-w-0 space-y-4">
+                <div className="min-w-0 border border-white/10 bg-[#0C0C0C] p-4 sm:p-5">
+                  <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                     <div>
-                      <div className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary px-3 py-1 text-xs uppercase tracking-[0.24em] text-muted-foreground">
-                        <HardDriveDownload className="h-3.5 w-3.5" />
-                        Deployment details
+                      <div className="flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-neutral-500">
+                        <HardDriveDownload className="h-3.5 w-3.5 text-emerald-400" />
+                        {deploymentProvider} deployment
+                        <span className="text-neutral-700">/</span>
+                        <span className="font-mono tracking-normal">{deploymentKey.slice(-8)}</span>
                       </div>
-                      <h1 className="mt-4 text-3xl font-semibold text-foreground">
+                      <h1 className="mt-2 text-2xl font-semibold tracking-tight text-white sm:text-3xl">
                         {deployment.repositoryName || 'Deployment'}
                       </h1>
-                      <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-                        <span className={`rounded-full border px-3 py-1 text-xs font-medium capitalize ${badgeClass}`}>{status}</span>
+                      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-neutral-400">
+                        <span className={`inline-flex items-center gap-1.5 border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider ${badgeClass}`}>
+                          <span className={`h-1.5 w-1.5 ${status === 'success' ? 'bg-emerald-400' : status === 'failed' ? 'bg-destructive' : 'bg-amber-300'}`} />
+                          {status}
+                        </span>
                         <span className="inline-flex items-center gap-1.5">
                           <GitBranch className="h-4 w-4" />
                           {deployment.branch || 'main'}
@@ -500,47 +511,48 @@ export default function DeploymentDetailPage() {
                       </div>
                     </div>
 
-                    {liveUrl ? (
-                      <a
-                        href={liveUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-2 rounded-2xl border border-primary bg-primary/10 px-4 py-3 text-sm font-medium text-primary transition hover:bg-primary/90"
-                      >
-                        <Globe2 className="h-4 w-4" />
-                        Open live URL
-                        <ExternalLink className="h-4 w-4" />
-                      </a>
-                    ) : (
-                      <div className="rounded-2xl border border-border bg-secondary px-4 py-3 text-sm text-muted-foreground">
-                        Live URL will appear after the deployment finishes.
-                      </div>
-                    )}
-                    {isAwsDeployment && deployment.status === 'success' && (
-                      <div className="mt-3 space-y-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {liveUrl ? (
+                        <a
+                          href={liveUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-2 border border-emerald-400/40 bg-emerald-400/[0.08] px-4 py-3 text-sm font-medium text-emerald-300 transition hover:bg-emerald-400/[0.14]"
+                        >
+                          <Globe2 className="h-4 w-4" />
+                          Open live site
+                          <ExternalLink className="h-4 w-4" />
+                        </a>
+                      ) : (
+                        <div className="border border-white/10 bg-[#101010] px-4 py-3 text-xs text-neutral-500">
+                          Live URL pending
+                        </div>
+                      )}
+                      {isAwsDeployment && deployment.status === 'success' && (
+                      <div className="space-y-3">
                         <button
                           type="button"
                           disabled={bringingDown}
                           onClick={() => setBringDownConfirmOpen(true)}
-                          className="ml-3 inline-flex items-center gap-2 rounded-2xl border border-destructive bg-destructive/10 px-4 py-3 text-sm font-medium text-destructive transition hover:bg-destructive/90"
+                          className="inline-flex items-center gap-2 border border-destructive/40 bg-destructive/[0.06] px-4 py-3 text-xs font-medium text-destructive transition hover:bg-destructive/10"
                         >
                           {bringingDown ? 'Bringing down…' : 'Bring Down'}
                         </button>
                         {bringDownConfirmOpen && !bringingDown && (
-                          <div className="rounded-2xl border border-destructive bg-destructive/10 p-4 text-sm text-destructive">
+                          <div className="border border-destructive/40 bg-[#111111] p-4 text-sm text-destructive">
                             <div className="font-medium">Terminate the EC2 instance and clean up the ECR repository?</div>
                             <div className="mt-3 flex flex-wrap gap-3">
                               <button
                                 type="button"
                                 onClick={() => void handleBringDown()}
-                                className="rounded-xl bg-destructive px-4 py-2 font-medium text-destructive-foreground transition hover:bg-destructive/90"
+                                className="border border-destructive bg-destructive/10 px-4 py-2 font-medium text-destructive transition hover:bg-destructive/20"
                               >
                                 Confirm bring down
                               </button>
                               <button
                                 type="button"
                                 onClick={() => setBringDownConfirmOpen(false)}
-                                className="rounded-xl border border-border bg-secondary px-4 py-2 font-medium text-foreground transition hover:bg-secondary"
+                                className="border border-white/10 bg-[#0C0C0C] px-4 py-2 font-medium text-neutral-300 transition hover:text-white"
                               >
                                 Cancel
                               </button>
@@ -549,47 +561,60 @@ export default function DeploymentDetailPage() {
                         )}
                       </div>
                     )}
-                    {isAzureDeployment && deployment.status === 'success' && (
-                      <div className="mt-3 rounded-2xl border border-primary bg-primary/10 p-4 text-sm text-primary">
-                        Azure deployments are managed through ACI/ACR. Use the Azure Portal to terminate resources.
-                      </div>
-                    )}
+                  </div>
                   </div>
 
-                  <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  <div className="mt-5 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
                     {[
-                      { label: 'Deployment ID', value: deploymentKey },
                       { label: 'Application', value: deployment.applicationName || deployment.repositoryName || 'Unknown' },
-                      { label: 'Application type', value: deployment.applicationType || 'Not set' },
-                      { label: 'Project ID', value: deployment.projectId || 'Not linked' },
-                      { label: 'Framework', value: deployment.framework || 'auto-detected' },
-                      { label: 'Health', value: deployment.healthStatus || 'unknown' },
-                      { label: 'Started at', value: formatDate(deployment.startedAt || deployment.createdAt) },
-                      { label: 'Completed at', value: formatDate(deployment.completedAt) },
-                      { label: 'Phase', value: deployment.phase || 'preparation' },
-                      { label: 'Live URL', value: deployment.domainUrl || liveInfrastructureUrl || 'Pending' },
+                      { label: 'Runtime', value: deployment.framework || metadata?.framework || 'Auto-detected' },
+                      { label: 'Health', value: deployment.healthStatus || 'Unknown' },
+                      { label: 'Region', value: infrastructure?.region || azureAciLocation || metadata?.target?.awsRegion || 'Managed' },
                     ].map((item) => (
-                      <div key={item.label} className="min-w-0 rounded-2xl border border-border bg-secondary px-4 py-3">
-                        <div className="text-[11px] uppercase tracking-[0.22em] text-foreground/40">{item.label}</div>
-                        <div className="mt-2 break-words text-sm font-medium text-foreground">{item.value}</div>
+                      <div key={item.label} className="min-w-0 border border-white/[0.07] bg-[#101010] px-3 py-2.5">
+                        <div className="text-[9px] font-medium uppercase tracking-[0.16em] text-neutral-600">{item.label}</div>
+                        <div className="mt-1 truncate text-xs font-medium text-neutral-200">{item.value}</div>
                       </div>
                     ))}
                   </div>
                 </div>
 
-                <div className="min-w-0 rounded-3xl border border-border bg-card p-5 ">
-                  <h2 className="text-lg font-semibold text-foreground">Progress</h2>
+                {deployment.error?.message && (
+                  <div className="flex items-start gap-3 border border-destructive/40 bg-destructive/[0.06] p-4 text-sm text-destructive">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                    <div>
+                      <div className="font-semibold">Deployment failed</div>
+                      <p className="mt-1 text-xs leading-5">{deployment.error.message}</p>
+                    </div>
+                  </div>
+                )}
+
+                <div className="min-w-0 border border-white/10 bg-[#0C0C0C] p-4 sm:p-5">
+                  <h2 className="text-sm font-semibold text-white">Build progress</h2>
                   <div className="mt-4">
                     <LiveProgressBar steps={activeSteps} current={currentStep} progress={progress} />
                   </div>
-                  <div className="mt-6">
-                    <DeploymentTimeline steps={timeline as any} />
-                  </div>
+                  <details className="mt-4 border-t border-white/[0.07] pt-3">
+                    <summary className="cursor-pointer text-xs font-medium text-neutral-500 transition hover:text-neutral-200">
+                      View all deployment steps
+                    </summary>
+                    <div className="mt-4">
+                      <DeploymentTimeline steps={timeline as any} />
+                    </div>
+                  </details>
                 </div>
 
-                <div className="min-w-0 rounded-3xl border border-border bg-card p-5 ">
-                  <h2 className="text-lg font-semibold text-foreground">Deployment logs</h2>
-                  <div className="mt-4">
+                <div className="min-w-0 border border-white/10 bg-[#0C0C0C] p-4 sm:p-5">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <h2 className="text-sm font-semibold text-white">Build logs</h2>
+                      <p className="mt-1 text-[11px] text-neutral-500">Live output from this deployment</p>
+                    </div>
+                    <span className="font-mono text-[10px] uppercase tracking-wider text-neutral-600">
+                      {logs.length} {logs.length === 1 ? 'entry' : 'entries'}
+                    </span>
+                  </div>
+                  <div className="mt-3">
                     {loading ? (
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <Loader2 className="h-4 w-4 animate-spin" />
@@ -598,7 +623,7 @@ export default function DeploymentDetailPage() {
                     ) : renderedLogs.length > 0 ? (
                       <TerminalStream logs={renderedLogs} />
                     ) : (
-                      <div className="rounded-xl border border-border bg-secondary px-4 py-3 text-sm text-muted-foreground">
+                      <div className="border border-white/10 bg-[#101010] px-4 py-3 text-sm text-neutral-500">
                         {deployment.status === 'building' || deployment.status === 'deploying'
                           ? 'Waiting for deployment logs...'
                           : deployment.error?.message || 'No logs recorded for this deployment.'}
@@ -608,9 +633,15 @@ export default function DeploymentDetailPage() {
                 </div>
               </div>
 
-              <div className="min-w-0 space-y-6">
-                <div className="min-w-0 rounded-3xl border border-border bg-card p-5 ">
-                  <h2 className="text-lg font-semibold text-foreground">Project info</h2>
+              <details className="group border border-white/10 bg-[#0C0C0C]">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-4 text-sm font-medium text-neutral-300 transition hover:text-white sm:px-5">
+                  <span>Repository, build and infrastructure details</span>
+                  <span className="text-[10px] uppercase tracking-wider text-neutral-600 group-open:hidden">Show</span>
+                  <span className="hidden text-[10px] uppercase tracking-wider text-neutral-600 group-open:inline">Hide</span>
+                </summary>
+                <div className="space-y-4 border-t border-white/[0.07] p-4 sm:p-5">
+                <div className="min-w-0 border border-white/[0.07] bg-[#0A0A0A] p-4">
+                  <h2 className="text-sm font-semibold text-neutral-200">Project info</h2>
                   <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
                     {[
                       { label: 'Repository name', value: deployment.repositoryName || 'Unknown' },
@@ -619,7 +650,7 @@ export default function DeploymentDetailPage() {
                       { label: 'User ID', value: deployment.userId || 'Unknown' },
                       { label: 'Project ID', value: deployment.projectId || 'Not linked' },
                     ].map((item) => (
-                      <div key={item.label} className="min-w-0 rounded-2xl border border-border bg-secondary px-4 py-3">
+                      <div key={item.label} className="min-w-0 border border-border bg-secondary px-4 py-3">
                         <div className="text-[11px] uppercase tracking-[0.22em] text-foreground/40">{item.label}</div>
                         <div className="mt-2 break-words text-sm text-foreground">{item.value}</div>
                       </div>
@@ -627,8 +658,8 @@ export default function DeploymentDetailPage() {
                   </div>
                 </div>
 
-                <div className="min-w-0 rounded-3xl border border-border bg-card p-5 ">
-                  <h2 className="text-lg font-semibold text-foreground">Source and build</h2>
+                <div className="min-w-0 border border-white/[0.07] bg-[#0A0A0A] p-4">
+                  <h2 className="text-sm font-semibold text-neutral-200">Source and build</h2>
                   <div className="mt-4 grid gap-3 sm:grid-cols-2">
                     {[
                       { label: 'Last commit', value: `${commitHash} ${fullCommitHash !== commitHash ? `(${fullCommitHash})` : ''}`.trim() },
@@ -641,7 +672,7 @@ export default function DeploymentDetailPage() {
                       { label: 'Docker build time', value: dockerBuildTime ? formatDuration(dockerBuildTime) : 'Pending' },
                       { label: 'Docker image size', value: dockerImageSize ? `${(dockerImageSize / (1024 * 1024)).toFixed(2)} MB` : 'Pending' },
                     ].map((item) => (
-                      <div key={item.label} className="min-w-0 rounded-2xl border border-border bg-secondary px-4 py-3">
+                      <div key={item.label} className="min-w-0 border border-border bg-secondary px-4 py-3">
                         <div className="text-[11px] uppercase tracking-[0.22em] text-foreground/40">{item.label}</div>
                         <div className="mt-2 break-all text-sm font-medium text-foreground">{item.value}</div>
                       </div>
@@ -649,8 +680,13 @@ export default function DeploymentDetailPage() {
                   </div>
                 </div>
 
-                <div className="min-w-0 rounded-3xl border border-border bg-card p-5 ">
-                  <h2 className="text-lg font-semibold text-foreground mb-4">Infrastructure Details</h2>
+                <div className="min-w-0 border border-white/[0.07] bg-[#0A0A0A] p-4">
+                  <h2 className="mb-4 text-sm font-semibold text-neutral-200">Infrastructure details</h2>
+                  {isAzureDeployment && deployment.status === 'success' && (
+                    <p className="mb-5 border border-primary/20 bg-primary/[0.04] px-3 py-2 text-xs text-primary">
+                      Azure resources are managed through ACI/ACR. Use the Azure Portal to terminate them.
+                    </p>
+                  )}
                   
                   {/* AWS EC2 Deployment */}
                   {isAwsDeployment && !isStaticDeployment && (
@@ -668,7 +704,7 @@ export default function DeploymentDetailPage() {
                             { label: 'VPC ID', value: infrastructure?.ec2?.vpcId || 'Pending' },
                             { label: 'Security Groups', value: (infrastructure?.ec2?.securityGroupIds || []).join(', ') || 'Pending' },
                           ].map((item) => (
-                            <div key={item.label} className="min-w-0 rounded-2xl border border-orange-400/10 bg-orange-500/5 px-4 py-3">
+                            <div key={item.label} className="min-w-0 border border-orange-400/10 bg-orange-500/5 px-4 py-3">
                               <div className="text-[11px] uppercase tracking-[0.22em] text-orange-400/60">{item.label}</div>
                               <div className="mt-2 break-all text-sm font-medium text-orange-200">{item.value}</div>
                             </div>
@@ -687,7 +723,7 @@ export default function DeploymentDetailPage() {
                             { label: 'Build Time', value: dockerBuildTime ? formatDuration(dockerBuildTime) : 'Pending' },
                             { label: 'Image Size', value: dockerImageSize ? `${(dockerImageSize / (1024 * 1024)).toFixed(2)} MB` : 'Pending' },
                           ].map((item) => (
-                            <div key={item.label} className="min-w-0 rounded-2xl border border-warning bg-warning/10 px-4 py-3">
+                            <div key={item.label} className="min-w-0 border border-warning bg-warning/10 px-4 py-3">
                               <div className="text-[11px] uppercase tracking-[0.22em] text-warning">{item.label}</div>
                               <div className="mt-2 break-all text-sm font-medium text-warning">{item.value}</div>
                             </div>
@@ -710,7 +746,7 @@ export default function DeploymentDetailPage() {
                           { label: 'Public IP', value: deploymentPublicIp },
                           { label: 'Live URL', value: deployment.domainUrl || liveInfrastructureUrl || 'Pending' },
                         ].map((item) => (
-                          <div key={item.label} className="min-w-0 rounded-2xl border border-success bg-success/10 px-4 py-3">
+                          <div key={item.label} className="min-w-0 border border-success bg-success/10 px-4 py-3">
                             <div className="text-[11px] uppercase tracking-[0.22em] text-success">{item.label}</div>
                             <div className="mt-2 break-all text-sm font-medium text-success">{item.value}</div>
                           </div>
@@ -733,7 +769,7 @@ export default function DeploymentDetailPage() {
                             { label: 'Build Time', value: dockerBuildTime ? formatDuration(dockerBuildTime) : 'Pending' },
                             { label: 'Image Size', value: dockerImageSize ? `${(dockerImageSize / (1024 * 1024)).toFixed(2)} MB` : 'Pending' },
                           ].map((item) => (
-                            <div key={item.label} className="min-w-0 rounded-2xl border border-border bg-secondary px-4 py-3">
+                            <div key={item.label} className="min-w-0 border border-border bg-secondary px-4 py-3">
                               <div className="text-[11px] uppercase tracking-[0.22em] text-sky-400/60">{item.label}</div>
                               <div className="mt-2 break-all text-sm font-medium text-sky-200">{item.value}</div>
                             </div>
@@ -754,7 +790,7 @@ export default function DeploymentDetailPage() {
                             { label: 'FQDN / IP', value: azureAciFqdn },
                             { label: 'Status', value: azureAciStatus },
                           ].map((item) => (
-                            <div key={item.label} className="min-w-0 rounded-2xl border border-primary bg-primary/10 px-4 py-3">
+                            <div key={item.label} className="min-w-0 border border-primary bg-primary/10 px-4 py-3">
                               <div className="text-[11px] uppercase tracking-[0.22em] text-primary">{item.label}</div>
                               <div className="mt-2 break-all text-sm font-medium text-primary">{item.value}</div>
                             </div>
@@ -775,7 +811,7 @@ export default function DeploymentDetailPage() {
                         { label: 'Live URL', value: deployment.domainUrl || liveInfrastructureUrl || 'Pending' },
                         { label: 'Deploy State', value: infrastructure?.deployState || 'Pending' },
                       ].map((item) => (
-                        <div key={item.label} className="min-w-0 rounded-2xl border border-border bg-secondary px-4 py-3">
+                        <div key={item.label} className="min-w-0 border border-border bg-secondary px-4 py-3">
                           <div className="text-[11px] uppercase tracking-[0.22em] text-foreground/40">{item.label}</div>
                           <div className="mt-2 break-all text-sm font-medium text-foreground">{item.value}</div>
                         </div>
@@ -784,19 +820,11 @@ export default function DeploymentDetailPage() {
                   </div>
                 </div>
 
-                {deployment.error?.message && (
-                  <div className="min-w-0 rounded-3xl border border-destructive bg-destructive/10 p-5 ">
-                    <div className="flex items-center gap-2 text-destructive">
-                      <AlertTriangle className="h-5 w-5" />
-                      <h2 className="text-lg font-semibold">Failure details</h2>
-                    </div>
-                    <p className="mt-3 text-sm text-destructive">{deployment.error.message}</p>
-                  </div>
-                )}
-              </div>
+                </div>
+              </details>
             </motion.div>
           ) : (
-            <div className="mt-8 rounded-3xl border border-border bg-card p-10 text-center text-muted-foreground">
+            <div className="mt-8 border border-border bg-card p-10 text-center text-muted-foreground">
               Deployment not found.
             </div>
           )}

@@ -11,6 +11,7 @@ from azure.mgmt.containerinstance.models import (  # type: ignore
     Container,
     ContainerGroup,
     ContainerPort,
+    EnvironmentVariable,
     ImageRegistryCredential,
     IpAddress,
     OperatingSystemTypes,
@@ -38,6 +39,8 @@ class AciConfig:
     acr_username: Optional[str]
     acr_password: Optional[str]
     poll_seconds: float
+    container_port: int
+    environment_variables: dict
 
 
 def get_aci_config_from_env() -> AciConfig:
@@ -71,6 +74,15 @@ def get_aci_config_from_env() -> AciConfig:
     acr_password = os.getenv("ACR_PASSWORD")
 
     poll_seconds = float(os.getenv("ACI_POLL_SECONDS") or "5")
+    container_port = int(os.getenv("ACI_PORT") or os.getenv("PORT") or "80")
+
+    # Parse environment variables JSON if passed
+    import json
+    raw_env = os.getenv("ACI_ENV_JSON") or "{}"
+    try:
+        env_dict = json.loads(raw_env)
+    except Exception:
+        env_dict = {}
 
     return AciConfig(
         subscription_id=subscription_id,
@@ -85,6 +97,8 @@ def get_aci_config_from_env() -> AciConfig:
         acr_username=acr_username,
         acr_password=acr_password,
         poll_seconds=poll_seconds,
+        container_port=container_port,
+        environment_variables=env_dict,
     )
 
 
@@ -99,15 +113,21 @@ def _build_registry_credentials(cfg: AciConfig):
 
 
 def create_container_group(client: ContainerInstanceManagementClient, cfg: AciConfig) -> None:
+    aci_env_vars = []
+    # Always supply PORT matching the exposed container_port so Node/Express listens on it
+    merged_env = {**cfg.environment_variables, "PORT": str(cfg.container_port)}
+    for k, v in merged_env.items():
+        if v is not None:
+            aci_env_vars.append(EnvironmentVariable(name=str(k), value=str(v)))
+
     container = Container(
         name=cfg.container_name,
         image=cfg.image,
         resources=ResourceRequirements(
             requests=ResourceRequests(cpu=cfg.cpu, memory_in_gb=cfg.memory_gb)
         ),
-        # Expose port 80 for web access (default HTTP port for web servers)
-        ports=[ContainerPort(port=80)],
-        environment_variables=[],
+        ports=[ContainerPort(port=cfg.container_port)],
+        environment_variables=aci_env_vars,
     )
 
     group = ContainerGroup(
@@ -116,7 +136,7 @@ def create_container_group(client: ContainerInstanceManagementClient, cfg: AciCo
         restart_policy="Always",
         containers=[container],
         image_registry_credentials=_build_registry_credentials(cfg),
-        ip_address=IpAddress(ports=[Port(port=80, protocol="TCP")], dns_name_label=cfg.container_group_name, type="Public"),
+        ip_address=IpAddress(ports=[Port(port=cfg.container_port, protocol="TCP")], dns_name_label=cfg.container_group_name, type="Public"),
     )
 
     poller = client.container_groups.begin_create_or_update(
@@ -249,7 +269,8 @@ def run_aci_task() -> int:
         
         print(f"[{_utc_iso()}] public IP: {public_ip}", flush=True)
         print(f"[{_utc_iso()}] FQDN: {fqdn}", flush=True)
-        print(f"[{_utc_iso()}] access URL: http://{fqdn}:80 or http://{public_ip}:80", flush=True)
+        port_suffix = f":{cfg.container_port}" if cfg.container_port != 80 else ""
+        print(f"[{_utc_iso()}] access URL: http://{fqdn}{port_suffix} or http://{public_ip}{port_suffix}", flush=True)
         
         # Store access info in environment for backend to retrieve
         os.environ["CONTAINER_PUBLIC_IP"] = public_ip or ""

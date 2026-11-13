@@ -54,7 +54,6 @@ function Routes() {
             <Route path="/billing" element={<BillingPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/deployments" element={<DeploymentsPage />} />
-            <Route path="/deployment-logs" element={<DeploymentsPage />} />
             <Route path="/deployments/:id" element={<DeploymentDetailPage />} />
             <Route path="/live-projects" element={<LiveProjectsPage />} />
             <Route path="/environment-variables" element={<EnvironmentVariablesPage />} />

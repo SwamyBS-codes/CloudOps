@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
+import { DEPLOYED_PROJECTS_STORAGE_KEY } from '@/lib/constants';
 
 type DeployedProject = {
   id: string;
@@ -9,8 +10,6 @@ type DeployedProject = {
   deployedAt?: string;
   liveUrl?: string;
 };
-
-const DEPLOYED_PROJECTS_KEY = 'cloudops_deployed_projects';
 
 const DeployedProjectCard: React.FC<{ project: DeployedProject }> = ({ project }) => {
   const content = (
@@ -69,7 +68,7 @@ export default function LiveProjectsPage() {
   useEffect(() => {
     const loadProjects = () => {
       try {
-        const raw = localStorage.getItem(DEPLOYED_PROJECTS_KEY);
+        const raw = localStorage.getItem(DEPLOYED_PROJECTS_STORAGE_KEY);
         const parsed = raw ? JSON.parse(raw) : [];
         setDeployedProjects(Array.isArray(parsed) ? parsed : []);
       } catch {

@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { useAuth } from '@/app/providers/auth-provider';
 import { Layout } from '@/components/layout';
 import LoginCard from '@/components/auth/LoginCard';
+import { AUTH_TOKEN_KEY } from '@/lib/constants';
 
 const LoginPage: React.FC = () => {
   const navigate = useNavigate();
@@ -15,7 +16,7 @@ const LoginPage: React.FC = () => {
     if (token) {
       login({ token }).then((success) => {
         if (success) navigate('/dashboard');
-        else localStorage.removeItem('cloudops_auth_token');
+        else localStorage.removeItem(AUTH_TOKEN_KEY);
       });
     }
   }, [searchParams, login, navigate]);

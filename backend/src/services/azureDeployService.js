@@ -31,9 +31,9 @@ function azureConfig() {
     orchestratorCwd: path.resolve(
       __dirname,  // backend/src/services
       '..', '..', // -> backend/
-      '..', 'azure', 'orchestrator'  // -> CloudOps/azure/orchestrator
+      '..', 'azure'  // -> SWAMY/azure (so `python -m orchestrator.core.aci_main` finds `orchestrator`)
     ),
-    python: process.env.PYTHON || 'python',
+    python: process.env.PYTHON || 'python3',
   };
 }
 
@@ -107,7 +107,7 @@ async function findFirstMatchingDir(repoPath, matcher) {
 
 async function detectFramework(repoPath) {
   const nodePath = await findNodeAppRelativePath(repoPath);
-  if (nodePath) return { framework: 'node', appRelativePath: nodePath };
+  if (nodePath) return { framework: 'nodejs', appRelativePath: nodePath };
 
   const pythonPath = await findFirstMatchingDir(repoPath, (entries) =>
     entries.some((e) => e.isFile() && (e.name === 'requirements.txt' || e.name.toLowerCase().endsWith('.py')))
@@ -131,6 +131,7 @@ async function ensureDockerfile(repoPath) {
   const cp = appRelativePath === '.' ? '' : `${appRelativePath}/`;
 
   const templates = {
+    nodejs: `FROM node:20-alpine\nWORKDIR /app\nCOPY ${cp}package*.json ./\nRUN npm install\nCOPY ${cp}. .\nEXPOSE ${DEFAULT_CONTAINER_PORT}\nCMD ["npm", "start"]\n`,
     node: `FROM node:20-alpine\nWORKDIR /app\nCOPY ${cp}package*.json ./\nRUN npm install\nCOPY ${cp}. .\nEXPOSE ${DEFAULT_CONTAINER_PORT}\nCMD ["npm", "start"]\n`,
     python: `FROM python:3.12-alpine\nENV PYTHONUNBUFFERED=1\nWORKDIR /app\nCOPY ${cp}. .\nRUN if [ -f requirements.txt ]; then pip install --no-cache-dir -r requirements.txt; fi\nCMD ["sh", "-c", "if [ -f app.py ]; then python app.py; elif [ -f main.py ]; then python main.py; else exit 1; fi"]\n`,
     static: `FROM nginx:alpine\nCOPY ${cp}. /usr/share/nginx/html\nEXPOSE 80\nCMD ["nginx", "-g", "daemon off;"]\n`,
@@ -142,7 +143,7 @@ async function ensureDockerfile(repoPath) {
   return { framework: detection.framework, appRelativePath, containerPort: detection.framework === 'static' ? 80 : DEFAULT_CONTAINER_PORT };
 }
 
-async function runAciViaPython({ deploymentId, appName, image, socketId, logLines, io, deployment }) {
+async function runAciViaPython({ deploymentId, appName, image, socketId, logLines, io, deployment, environmentVariables = {}, port = 80 }) {
   const cfg = azureConfig();
   const groupName = `cg-${appName}-${deploymentId}`.slice(0, 63);
   const logsBlobName = `${cfg.prefixBase}/${deploymentId}/aci.log.txt`;
@@ -154,6 +155,8 @@ async function runAciViaPython({ deploymentId, appName, image, socketId, logLine
     ACI_IMAGE: image,
     ACI_CONTAINER_GROUP_NAME: groupName,
     ACI_CONTAINER_NAME: 'task',
+    ACI_PORT: String(port || 80),
+    ACI_ENV_JSON: JSON.stringify(environmentVariables || {}),
     ACI_CPU: process.env.ACI_CPU || '1',
     ACI_MEMORY_GB: process.env.ACI_MEMORY_GB || '1.5',
     AZURE_LOGS_CONTAINER: cfg.blobContainer,
@@ -184,12 +187,15 @@ async function runAciViaPython({ deploymentId, appName, image, socketId, logLine
   });
   await aciLogQueue;
 
+  const portSuffix = port && port !== 80 ? `:${port}` : '';
+  const accessUrl = fqdn ? `http://${fqdn}${portSuffix}` : publicIp ? `http://${publicIp}${portSuffix}` : null;
+
   return {
     containerGroup: groupName,
     containerName: 'task',
     publicIp,
     fqdn,
-    accessUrl: fqdn ? `http://${fqdn}` : publicIp ? `http://${publicIp}:80` : null,
+    accessUrl,
   };
 }
 
@@ -242,6 +248,7 @@ async function runAzureDeployment({
   applicationName,
   estimatedCostMonthly,
   estimatedDeployMinutes,
+  environmentVariables = {},
   onStarted,
 }) {
   const cfg = azureConfig();
@@ -258,6 +265,10 @@ async function runAzureDeployment({
 
   // Create deployment record
   let deployment = null;
+  const envEntries = Array.isArray(environmentVariables)
+    ? environmentVariables
+    : Object.entries(environmentVariables || {}).map(([key, value]) => ({ key, value: String(value), encrypted: false }));
+
   try {
     deployment = new Deployment({
       userId: userId || 'anonymous',
@@ -268,6 +279,7 @@ async function runAzureDeployment({
       deploymentType,
       provider,
       deploymentService: 'azure',
+      environmentVariables: envEntries,
       estimatedCostMonthly,
       estimatedDeployMinutes,
       healthStatus: 'checking',
@@ -363,7 +375,29 @@ async function runAzureDeployment({
 
     await emitLog(io, socketId, 'Image pushed to ACR successfully', deployment, 'acr', 'success');
 
-    const aciResult = await runAciViaPython({ deploymentId, appName: sanitizedName, image: fullImage, socketId, logLines, io, deployment });
+    // Convert env array or object into standard key-value map for container injection
+    const envMap = {};
+    if (Array.isArray(environmentVariables)) {
+      environmentVariables.forEach((e) => {
+        if (e && e.key) envMap[e.key] = e.value;
+      });
+    } else if (typeof environmentVariables === 'object' && environmentVariables !== null) {
+      Object.assign(envMap, environmentVariables);
+    }
+
+    const containerPort = buildPlan?.containerPort || DEFAULT_CONTAINER_PORT;
+
+    const aciResult = await runAciViaPython({
+      deploymentId,
+      appName: sanitizedName,
+      image: fullImage,
+      socketId,
+      logLines,
+      io,
+      deployment,
+      environmentVariables: envMap,
+      port: containerPort,
+    });
 
     const appUrl = aciResult.accessUrl || `http://${aciResult.publicIp}`;
     await emitLog(io, socketId, `[Azure] Container running at: ${appUrl}`, deployment, 'aci', 'success');

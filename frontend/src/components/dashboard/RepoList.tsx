@@ -7,28 +7,14 @@ import { axiosClient } from '@/services/api/axios-client';
 import { useAuth } from '@/app/providers/auth-provider';
 import { useNavigate } from 'react-router-dom';
 import { Github, Loader2, Search, Plus, Trash2, X } from 'lucide-react';
+import { CONNECTED_REPOSITORIES_STORAGE_KEY } from '@/lib/constants';
 
-const STORAGE_KEY = 'cloudops_connected_repositories';
+const STORAGE_KEY = CONNECTED_REPOSITORIES_STORAGE_KEY;
 
 type EnvDraft = {
   id: number;
   key: string;
   value: string;
-};
-
-const isObjectId = (value: string | undefined | null) => !!value && /^[a-f0-9]{24}$/i.test(value);
-
-const buildProjectId = (repoId: string | number, user: any) => {
-  const fromUser = user?.id || user?._id || user?.sub;
-  if (isObjectId(fromUser)) {
-    return fromUser;
-  }
-
-  if (typeof repoId === 'number' && Number.isFinite(repoId)) {
-    return Math.abs(repoId).toString(16).padStart(24, '0').slice(0, 24);
-  }
-
-  return '507f1f77bcf86cd799439011';
 };
 
 const RepoList: React.FC = () => {
@@ -184,8 +170,12 @@ const RepoList: React.FC = () => {
     setIsStartingDeployment(true);
 
     try {
+      // The backend resolves the connected project from repositoryName +
+      // repositoryOwner; never fabricate a projectId client-side.
+      const [repositoryOwner] = repoToDeploy.fullName.split('/');
       const response = await axiosClient.post('/api/deploy/start', {
-        projectId: buildProjectId(repoToDeploy.id, user),
+        repositoryName: repoToDeploy.name,
+        repositoryOwner,
         repositoryUrl: repoToDeploy.cloneUrl,
         branch: repoToDeploy.defaultBranch || 'main',
         environmentVariables,
@@ -196,7 +186,6 @@ const RepoList: React.FC = () => {
         throw new Error('Deployment started but no deploymentId was returned by the server.');
       }
 
-      sessionStorage.setItem('cloudops_selected_repository', JSON.stringify({ ...repoToDeploy, envVars: normalizedEnvVars }));
       setDeployingRepo(null);
       navigate(`/deployments/${encodeURIComponent(deploymentId)}`);
     } catch (deployError: any) {

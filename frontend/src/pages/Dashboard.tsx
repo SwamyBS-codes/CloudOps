@@ -9,8 +9,6 @@ import {
   TrendingUp,
   ArrowRight,
   Github,
-  Plus,
-  Loader2,
 } from 'lucide-react';
 import {
   PageHeader,
@@ -52,29 +50,28 @@ export default function DashboardPage() {
     refetchInterval: 30000,
   });
 
-  // Calculate stats from real data
+  // Calculate stats from real data (resets when the list becomes empty)
   useEffect(() => {
-    if (allDeployments && allDeployments.length > 0) {
-      const successful = allDeployments.filter(d => d.status === 'success').length;
-      const active = allDeployments.filter(d => d.status === 'building' || d.status === 'deploying' || d.status === 'pending').length;
-      const failed = allDeployments.filter(d => d.status === 'failed').length;
-      
-      const completedWithTime = allDeployments
-        .filter(d => d.totalTime && d.status === 'success')
-        .map(d => d.totalTime || 0);
-      
-      const avgTime = completedWithTime.length > 0
-        ? completedWithTime.reduce((a, b) => a + b, 0) / completedWithTime.length
-        : 0;
+    const deployments = allDeployments || [];
+    const successful = deployments.filter(d => d.status === 'success').length;
+    const active = deployments.filter(d => d.status === 'building' || d.status === 'deploying' || d.status === 'pending').length;
+    const failed = deployments.filter(d => d.status === 'failed').length;
 
-      setDeploymentStats({
-        total: allDeployments.length,
-        success: successful,
-        active: active,
-        failed: failed,
-        avgTime: avgTime,
-      });
-    }
+    const completedWithTime = deployments
+      .filter(d => d.totalTime && d.status === 'success')
+      .map(d => d.totalTime || 0);
+
+    const avgTime = completedWithTime.length > 0
+      ? completedWithTime.reduce((a, b) => a + b, 0) / completedWithTime.length
+      : 0;
+
+    setDeploymentStats({
+      total: deployments.length,
+      success: successful,
+      active: active,
+      failed: failed,
+      avgTime: avgTime,
+    });
   }, [allDeployments]);
 
   const formatDuration = (ms?: number) => {
@@ -187,12 +184,6 @@ export default function DashboardPage() {
                 Connect your GitHub repositories to deploy with CloudOps.
               </p>
             </div>
-            <Link to="/deploy">
-              <Button size="sm" className="gap-2">
-                <Plus className="h-4 w-4" />
-                Connect Repository
-              </Button>
-            </Link>
           </div>
 
           <Suspense

@@ -11,13 +11,13 @@ const LiveProgressBar: React.FC<{ steps: string[]; current: number; progress: nu
         <div>{Math.round(progress)}%</div>
       </div>
 
-      <div className="rounded-xl border border-border bg-secondary px-4 py-3">
+      <div className="border border-border bg-secondary px-4 py-3">
         <div className="text-sm font-medium text-foreground">{currentStep}</div>
       </div>
 
-      <div className="w-full bg-secondary rounded-full h-3 overflow-hidden">
+      <div className="h-2 w-full overflow-hidden border border-border bg-secondary">
         <motion.div
-          className="h-3 bg-gradient-to-r from-primary to-accent shadow-glow"
+          className="h-full bg-emerald-400"
           initial={{ width: 0 }}
           animate={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
           transition={{ ease: 'easeInOut', duration: 0.6 }}

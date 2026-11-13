@@ -18,7 +18,7 @@ import {
   Cloud,
   Package,
 } from 'lucide-react';
-import { formatApplicationType, formatHealthStatus } from '@/lib/application-types';
+import { formatApplicationType, formatHealthStatus, resolveDeploymentProvider } from '@/lib/application-types';
 import { authService, deploymentService } from '@/services/auth-service';
 import {
   PageHeader,
@@ -356,19 +356,15 @@ export default function DeploymentsPage() {
             const appType = formatApplicationType(deployment.applicationType);
             const health = formatHealthStatus(deployment.healthStatus);
             
-            // Determine provider
-            const deploymentService = (deployment as any)?.deploymentService || 'unknown';
-            const provider = (deployment as any)?.infrastructure?.provider || deploymentService;
-            const isAWS = provider === 'aws' || deploymentService === 'aws';
-            const isAzure = provider === 'azure' || deploymentService === 'azure';
-            const isS3 = deploymentService === 's3-static' || deploymentService === 's3' || provider === 's3';
-            
+            // Determine provider (shared derivation, no shadowing)
+            const provider = resolveDeploymentProvider(deployment as any);
+
             let providerBadge = { label: 'Cloud', color: 'bg-secondary text-blue-400 border-border' };
-            if (isAWS) {
+            if (provider === 'aws') {
               providerBadge = { label: 'AWS', color: 'bg-orange-500/10 text-orange-400 border-orange-500/20' };
-            } else if (isAzure) {
+            } else if (provider === 'azure') {
               providerBadge = { label: 'Azure', color: 'bg-secondary text-sky-400 border-border' };
-            } else if (isS3) {
+            } else if (provider === 's3') {
               providerBadge = { label: 'S3', color: 'bg-success/10 text-success border-success' };
             }
 
@@ -406,7 +402,7 @@ export default function DeploymentsPage() {
 
                 {/* Provider-specific details */}
                 <div className="mb-4 rounded-lg bg-secondary/30 p-3 text-xs space-y-2 border border-border/40">
-                  {isAWS && (
+                  {provider === 'aws' && (
                     <>
                       {(deployment as any)?.infrastructure?.ec2?.instanceId && (
                         <div className="flex justify-between">
@@ -422,7 +418,7 @@ export default function DeploymentsPage() {
                       )}
                     </>
                   )}
-                  {isAzure && (
+                  {provider === 'azure' && (
                     <>
                       {(deployment as any)?.infrastructure?.aci?.containerGroupName && (
                         <div className="flex justify-between">
@@ -438,7 +434,7 @@ export default function DeploymentsPage() {
                       )}
                     </>
                   )}
-                  {isS3 && (
+                  {provider === 's3' && (
                     <>
                       {(deployment as any)?.infrastructure?.s3?.bucket && (
                         <div className="flex justify-between">

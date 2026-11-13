@@ -23,6 +23,10 @@ export const AUTH_TOKEN_KEY = 'cloudops_auth_token';
 export const AUTH_REFRESH_TOKEN_KEY = 'cloudops_refresh_token';
 export const USER_KEY = 'cloudops_user';
 
+// Local storage keys
+export const DEPLOYED_PROJECTS_STORAGE_KEY = 'cloudops_deployed_projects';
+export const CONNECTED_REPOSITORIES_STORAGE_KEY = 'cloudops_connected_repositories';
+
 // Routes
 export const ROUTES = {
   HOME: '/',

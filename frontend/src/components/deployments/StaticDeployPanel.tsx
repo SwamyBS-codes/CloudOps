@@ -6,6 +6,7 @@ import {
   type FrameworkDetection,
   type SuggestedRoot,
 } from '@/services/deployment-service';
+import { API_BASE_URL } from '@/lib/constants';
 
 type StaticStep = 's3-folder' | 's3-framework' | 's3-env';
 
@@ -48,7 +49,7 @@ export default function StaticDeployPanel({
   const [outputDirectory, setOutputDirectory] = useState('dist');
   const [envVars, setEnvVars] = useState<EnvVar[]>([
     { id: 1, key: 'NODE_ENV', value: 'production' },
-    { id: 2, key: 'VITE_API_URL', value: import.meta.env.VITE_API_URL || 'http://localhost:5000' },
+    { id: 2, key: 'VITE_API_URL', value: API_BASE_URL },
   ]);
 
   const applyDetection = useCallback((result: FrameworkDetection) => {

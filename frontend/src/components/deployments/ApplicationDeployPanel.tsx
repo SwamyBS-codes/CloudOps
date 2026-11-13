@@ -42,7 +42,6 @@ type Props = {
   onPrimaryRootChange: (root: string) => void;
   onDeploying: () => void;
   onDeploymentStarted?: (deploymentId: string) => void;
-  onComplete: (url: string, deploymentId?: string) => void;
   onError: () => void;
   addLog: (text: string, type?: string) => void;
   socketRef: React.RefObject<Socket | null>;
@@ -59,7 +58,6 @@ export default function ApplicationDeployPanel({
   onPrimaryRootChange,
   onDeploying,
   onDeploymentStarted,
-  onComplete,
   onError,
   addLog,
   socketRef,
@@ -74,7 +72,8 @@ export default function ApplicationDeployPanel({
 
   const recommendation = scan.recommendation;
   const selectedLabel = APPLICATION_TYPE_LABELS[applicationType];
-  const SelectedIcon = TYPE_ICONS[applicationType];
+  const DetectedIcon = TYPE_ICONS[scan.applicationType];
+  const detectedLabel = APPLICATION_TYPE_LABELS[scan.applicationType];
 
   const estimatedCost = recommendation?.estimatedCostMonthlyUsd ?? 0;
   const estimatedMinutes = recommendation?.estimatedDeployMinutes ?? 5;
@@ -90,6 +89,7 @@ export default function ApplicationDeployPanel({
     addLog(`Deploying ${selectedLabel}...`, 'system');
 
     // Room join happens after deploymentId is returned from the API.
+    // Completion events are handled by the page-level socket listeners.
 
     const environmentVariables = envVars
       .filter((v) => v.key.trim())
@@ -97,36 +97,6 @@ export default function ApplicationDeployPanel({
         acc[v.key.trim()] = v.value;
         return acc;
       }, {});
-
-    const onCompleteEvent = (data: {
-      status?: string;
-      publicUrl?: string;
-      liveUrl?: string;
-      publicIp?: string;
-      deploymentId?: string;
-      error?: string;
-    }) => {
-      const url = data.publicUrl || data.liveUrl;
-      if (data.status === 'success' && url) {
-        addLog(`Live at ${url}`, 'success');
-        if (data.publicIp) {
-          addLog(`Public IP: ${data.publicIp}`, 'success');
-        }
-        onComplete(url, data.deploymentId);
-      } else if (data.status === 'failed') {
-        addLog(data.error || 'Deployment failed', 'error');
-        if (data.deploymentId) {
-          addLog(`View details: /deployments/${data.deploymentId}`, 'info');
-        }
-        onError();
-      }
-      socketRef.current?.off('build-complete', onCompleteEvent);
-      socketRef.current?.off('deployment-complete', onCompleteEvent);
-      setIsDeploying(false);
-    };
-
-    socketRef.current?.on('build-complete', onCompleteEvent);
-    socketRef.current?.on('deployment-complete', onCompleteEvent);
 
     try {
       if (applicationType === 'frontend-website' && envVars.some((v) => v.key.trim())) {
@@ -163,76 +133,74 @@ export default function ApplicationDeployPanel({
         socketRef.current?.emit('join-deployment', `deployment:${result.deploymentId}`);
         onDeploymentStarted?.(result.deploymentId);
       }
-
-      if (result.deploymentId && applicationType !== 'frontend-website') {
-        return;
-      }
-
-      if (result.publicUrl) {
-        onComplete(result.publicUrl, result.deploymentId);
-        setIsDeploying(false);
-      }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Deployment failed';
       addLog(message, 'error');
       onError();
       setIsDeploying(false);
-      socketRef.current?.off('build-complete', onCompleteEvent);
-      socketRef.current?.off('deployment-complete', onCompleteEvent);
     }
   };
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-2 text-sm text-success">
-        <Sparkles className="h-4 w-4" />
-        <span>CloudOps detected your application</span>
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-neutral-500">Deployment setup</p>
+          <h2 className="mt-1 text-base font-semibold text-white">Choose how to run this project</h2>
+        </div>
+        <span className="inline-flex shrink-0 items-center gap-1.5 border border-emerald-400/20 bg-emerald-400/[0.06] px-2 py-1 text-[10px] font-medium uppercase tracking-wide text-emerald-300">
+          <Sparkles className="h-3 w-3" />
+          {Math.round((scan.confidence || 0) * 100)}% match
+        </span>
       </div>
 
       {/* Detected type card */}
-      <div className="rounded-xl border border-success bg-success/10 p-4">
+      <div className="border-l-2 border-emerald-400 bg-[#111111] px-3 py-3">
         <div className="flex items-start gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-success/10">
-            <SelectedIcon className="h-5 w-5 text-success" />
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center border border-emerald-400/20 bg-emerald-400/[0.06]">
+            <DetectedIcon className="h-4 w-4 text-emerald-300" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-xs uppercase tracking-wider text-success">Recommended</p>
-            <h3 className="text-base font-semibold text-foreground">{selectedLabel}</h3>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {APPLICATION_TYPE_DESCRIPTIONS[applicationType]}
+            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-emerald-300">Recommended configuration</p>
+            <h3 className="mt-0.5 text-sm font-semibold text-white">{detectedLabel}</h3>
+            <p className="mt-1 text-[11px] leading-4 text-neutral-400">
+              {APPLICATION_TYPE_DESCRIPTIONS[scan.applicationType]}
             </p>
             {scan.detectedFrameworks.length > 0 && (
-              <p className="mt-2 text-xs text-muted-foreground">
-                Detected: {scan.detectedFrameworks.join(', ')}
+              <p className="mt-1.5 truncate font-mono text-[10px] text-neutral-500" title={scan.detectedFrameworks.join(', ')}>
+                STACK / {scan.detectedFrameworks.join(' · ')}
               </p>
             )}
           </div>
         </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-2">
-          <div className="rounded-lg bg-secondary px-3 py-2">
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <div className="mt-3 grid grid-cols-2 border-t border-white/[0.07] pt-3">
+          <div className="px-1">
+            <div className="flex items-center gap-1.5 text-[10px] text-neutral-500">
               <DollarSign className="h-3.5 w-3.5" /> Est. monthly cost
             </div>
-            <p className="mt-1 text-sm font-medium text-foreground">~${estimatedCost}/mo</p>
+            <p className="mt-1 font-mono text-sm font-semibold text-neutral-100">~${estimatedCost}<span className="ml-1 text-[10px] font-normal text-neutral-500">/mo</span></p>
           </div>
-          <div className="rounded-lg bg-secondary px-3 py-2">
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <div className="border-l border-white/[0.07] px-3">
+            <div className="flex items-center gap-1.5 text-[10px] text-neutral-500">
               <Clock className="h-3.5 w-3.5" /> Est. deploy time
             </div>
-            <p className="mt-1 text-sm font-medium text-foreground">~{estimatedMinutes} min</p>
+            <p className="mt-1 font-mono text-sm font-semibold text-neutral-100">~{estimatedMinutes}<span className="ml-1 text-[10px] font-normal text-neutral-500">min</span></p>
           </div>
         </div>
 
-        <p className="mt-3 text-xs text-success">
+        <p className="mt-2 text-[10px] leading-4 text-neutral-500">
           {recommendation?.userFacingSummary || 'Optimized hosting selected for your app'}
         </p>
       </div>
 
       {/* Override application type */}
       <div>
-        <label className="mb-2 block text-xs font-medium text-muted-foreground">Application type</label>
-        <div className="grid gap-2">
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <label className="block text-xs font-medium text-neutral-300">Application type</label>
+          <span className="text-[10px] text-neutral-600">Select a deployment target</span>
+        </div>
+        <div className="grid grid-cols-3 gap-1.5">
           {(Object.keys(APPLICATION_TYPE_LABELS) as ApplicationType[]).map((type) => {
             const Icon = TYPE_ICONS[type];
             const isSelected = applicationType === type;
@@ -241,16 +209,21 @@ export default function ApplicationDeployPanel({
                 key={type}
                 type="button"
                 onClick={() => setApplicationType(type)}
-                className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 text-left text-sm transition ${
+                aria-pressed={isSelected}
+                title={APPLICATION_TYPE_DESCRIPTIONS[type]}
+                className={`flex min-w-0 flex-col items-start gap-2 border px-2.5 py-3 text-left transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400 ${
                   isSelected
-                    ? 'border-success bg-success/10 text-foreground'
-                    : 'border-border bg-secondary text-foreground hover:border-border'
+                    ? 'border-emerald-400/60 bg-emerald-400/[0.07] text-white'
+                    : 'border-white/10 bg-[#111111] text-neutral-400 hover:border-white/25 hover:text-neutral-200'
                 }`}
               >
-                <Icon className="h-4 w-4 shrink-0" />
-                <div>
-                  <div className="font-medium">{APPLICATION_TYPE_LABELS[type]}</div>
-                  <div className="text-xs opacity-70">{APPLICATION_TYPE_DESCRIPTIONS[type]}</div>
+                <span className="flex w-full items-center justify-between gap-1">
+                  <Icon className={`h-4 w-4 shrink-0 ${isSelected ? 'text-emerald-300' : 'text-neutral-500'}`} />
+                  {isSelected && <span className="h-1.5 w-1.5 bg-emerald-300" />}
+                </span>
+                <div className="min-w-0">
+                  <div className="truncate text-[11px] font-semibold leading-4">{APPLICATION_TYPE_LABELS[type]}</div>
+                  <div className="mt-0.5 truncate text-[9px] leading-3 text-neutral-500">{APPLICATION_TYPE_DESCRIPTIONS[type]}</div>
                 </div>
               </button>
             );
@@ -261,11 +234,11 @@ export default function ApplicationDeployPanel({
       {/* Root directory for frontend */}
       {applicationType === 'frontend-website' && scan.suggestedRoots.length > 1 && (
         <div>
-          <label className="mb-2 block text-xs font-medium text-muted-foreground">Project folder</label>
+          <label className="mb-2 block text-xs font-medium text-neutral-300">Project folder</label>
           <select
             value={primaryRoot}
             onChange={(e) => onPrimaryRootChange(e.target.value)}
-            className="w-full rounded-lg border border-border bg-secondary px-3 py-2 text-xs focus:border-success outline-none"
+            className="w-full border border-white/10 bg-[#111111] px-3 py-2 text-xs text-neutral-200 outline-none transition focus:border-emerald-400/60"
           >
             {scan.suggestedRoots.map((root) => (
               <option key={root.path} value={root.path}>
@@ -279,7 +252,7 @@ export default function ApplicationDeployPanel({
       {/* Env vars for frontend builds */}
       {applicationType === 'frontend-website' && (
         <div>
-          <label className="mb-2 block text-xs font-medium text-muted-foreground">
+          <label className="mb-2 block text-xs font-medium text-neutral-300">
             Build environment variables
           </label>
           <div className="max-h-32 space-y-2 overflow-y-auto">
@@ -290,14 +263,14 @@ export default function ApplicationDeployPanel({
                   value={v.key}
                   onChange={(e) => updateEnvVar(v.id, 'key', e.target.value)}
                   placeholder="VITE_API_URL"
-                  className="flex-1 rounded-lg border border-border bg-secondary px-2 py-1.5 text-xs font-mono outline-none focus:border-success"
+                  className="min-w-0 flex-1 border border-white/10 bg-[#111111] px-2 py-1.5 text-xs font-mono text-neutral-200 outline-none focus:border-emerald-400/60"
                 />
                 <input
                   type="text"
                   value={v.value}
                   onChange={(e) => updateEnvVar(v.id, 'value', e.target.value)}
                   placeholder="value"
-                  className="flex-1 rounded-lg border border-border bg-secondary px-2 py-1.5 text-xs font-mono outline-none focus:border-success"
+                  className="min-w-0 flex-1 border border-white/10 bg-[#111111] px-2 py-1.5 text-xs font-mono text-neutral-200 outline-none focus:border-emerald-400/60"
                 />
                 <button
                   type="button"
@@ -323,7 +296,7 @@ export default function ApplicationDeployPanel({
         type="button"
         onClick={handleDeploy}
         disabled={isDeploying}
-        className="w-full rounded-lg bg-success/10 py-2.5 text-sm font-semibold text-success transition hover:bg-success/90 disabled:opacity-50"
+        className="w-full border border-emerald-400/40 bg-emerald-400/[0.08] py-3 text-sm font-semibold text-emerald-300 transition hover:border-emerald-300 hover:bg-emerald-400/[0.14] disabled:cursor-wait disabled:opacity-50"
       >
         {isDeploying ? 'Deploying...' : `Deploy ${selectedLabel}`}
       </button>
@@ -331,14 +304,14 @@ export default function ApplicationDeployPanel({
       <button
         type="button"
         onClick={() => setShowAdvanced(!showAdvanced)}
-        className="flex w-full items-center justify-center gap-1 text-xs text-foreground/40 hover:text-muted-foreground"
+        className="flex w-full items-center justify-center gap-1 border-t border-white/[0.07] pt-3 text-xs text-neutral-500 hover:text-neutral-200"
       >
         {showAdvanced ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
         Advanced settings
       </button>
 
       {showAdvanced && (
-        <div className="rounded-lg border border-border bg-secondary p-3 text-xs text-muted-foreground">
+        <div className="border border-white/10 bg-[#111111] p-3 text-xs text-neutral-400">
           Infrastructure is managed automatically. CloudOps maps your application type to the best
           hosting option. Contact your administrator to override provider settings.
         </div>
