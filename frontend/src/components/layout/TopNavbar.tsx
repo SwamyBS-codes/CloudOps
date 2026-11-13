@@ -1,6 +1,6 @@
 import React, { memo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Bell, Menu, Plus, Settings, LogOut, User } from 'lucide-react';
+import { Search, Bell, Menu, Plus, Settings, LogOut, User, Database } from 'lucide-react';
 import { useAuth } from '@/app/providers/auth-provider';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -93,6 +93,10 @@ const TopNavbar: React.FC<{ onToggleMobileSidebar?: () => void }> = ({ onToggleM
               <DropdownMenuItem onClick={() => navigate('/settings')}>
                 <Settings className="mr-2 h-4 w-4" />
                 Settings
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate('/environment-variables')}>
+                <Database className="mr-2 h-4 w-4" />
+                Environment Variables
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive">

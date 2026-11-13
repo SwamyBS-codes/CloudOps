@@ -1041,6 +1041,39 @@ class DeploymentEngineService {
     return logs.slice(skip, skip + limit);
   }
 
+  async cancelQueuedDeployment(deploymentId, io = null) {
+    const deployment = await Deployment.findById(deploymentId);
+    if (!deployment) {
+      throw new Error('Deployment not found');
+    }
+
+    if (!['pending', 'queued'].includes(deployment.status)) {
+      throw new Error('Only deployments waiting in the queue can be cancelled');
+    }
+
+    const queueIndex = this.queue.findIndex((job) => job.deploymentId === String(deploymentId));
+    if (queueIndex < 0) {
+      throw new Error('Deployment has already started and can no longer be cancelled');
+    }
+
+    const [job] = this.queue.splice(queueIndex, 1);
+    deployment.updateStatus('cancelled', 'cleanup');
+    deployment.completedAt = new Date();
+    deployment.metadata = deployment.metadata || {};
+    deployment.metadata.queueState = 'cancelled';
+    deployment.addLog('system', 'info', 'Queued deployment cancelled by user');
+
+    try {
+      await deployment.save();
+    } catch (error) {
+      this.queue.splice(queueIndex, 0, job);
+      throw error;
+    }
+
+    this.emitLog(io, deployment, 'system', 'info', 'Queued deployment cancelled', {});
+    return { success: true, status: 'cancelled' };
+  }
+
   async stopDeployment(deploymentId, io = null) {
     const deployment = await Deployment.findById(deploymentId);
     if (!deployment) {

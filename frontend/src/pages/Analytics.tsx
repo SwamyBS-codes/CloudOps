@@ -169,7 +169,7 @@ export default function AnalyticsPage(){
         </Card>
       ) : (
         <>
-          <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+          <div id="analytics-summary" className="mb-8 grid grid-cols-1 gap-4 scroll-mt-20 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
             {statCards.map((card, i) => (
               <MetricCard key={card.label} label={card.label} value={card.value} icon={card.icon} delay={i * 0.05} />
             ))}
@@ -177,6 +177,7 @@ export default function AnalyticsPage(){
 
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
             <div className="space-y-6 lg:col-span-2">
+              <div id="analytics-trends" className="scroll-mt-20">
               <ChartContainer title="Deployment trend" description="Daily success vs failure">
                 <div style={{ width: '100%', height: 260 }}>
                   <ResponsiveContainer>
@@ -198,6 +199,7 @@ export default function AnalyticsPage(){
                   </ResponsiveContainer>
                 </div>
               </ChartContainer>
+              </div>
             </div>
 
             <div className="space-y-6">
@@ -233,6 +235,7 @@ export default function AnalyticsPage(){
           </div>
 
           <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <div id="analytics-performance" className="scroll-mt-20">
             <ChartContainer title="Slowest deployments">
               <div className="space-y-2">
                 {(performance.slowestDeployments || []).length === 0 ? (
@@ -249,7 +252,9 @@ export default function AnalyticsPage(){
                 )}
               </div>
             </ChartContainer>
+            </div>
 
+            <div id="analytics-repositories" className="scroll-mt-20">
             <ChartContainer title="Top repositories">
               <div className="space-y-2">
                 {(deployments.topRepositories || []).length === 0 ? (
@@ -266,6 +271,7 @@ export default function AnalyticsPage(){
                 )}
               </div>
             </ChartContainer>
+            </div>
           </div>
         </>
       )}

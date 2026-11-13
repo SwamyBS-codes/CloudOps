@@ -1,5 +1,42 @@
 const jwt = require('jsonwebtoken');
+const path = require('path');
+const { spawn } = require('child_process');
 const Project = require('../models/Project');
+const Deployment = require('../models/Deployment');
+
+// Helper to execute Python ACI update
+function triggerAciUpdate({ subscriptionId, resourceGroup, groupName, envMap, port }) {
+  return new Promise((resolve, reject) => {
+    const orchestratorCwd = path.resolve(__dirname, '..', '..', '..', 'azure');
+    const python = process.env.PYTHON || 'python3';
+    const child = spawn(
+      python,
+      [
+        '-m',
+        'orchestrator.core.update_aci_env',
+        '--subscription-id',
+        subscriptionId,
+        '--resource-group',
+        resourceGroup,
+        '--group-name',
+        groupName,
+        '--env-json',
+        JSON.stringify(envMap),
+        '--port',
+        String(port || 80),
+      ],
+      { cwd: orchestratorCwd, env: process.env }
+    );
+
+    let output = '';
+    child.stdout.on('data', (d) => { output += d.toString(); });
+    child.stderr.on('data', (d) => { output += d.toString(); });
+    child.on('close', (code) => {
+      if (code === 0) resolve(output);
+      else reject(new Error(output || `Failed with exit code ${code}`));
+    });
+  });
+}
 
 // Update project (used to update environment variables)
 const updateProject = async (req, res) => {
@@ -40,7 +77,49 @@ const updateProject = async (req, res) => {
 
     await project.save();
 
-    return res.status(200).json({ success: true, project });
+    // Check if there is an active Azure deployment for this project and sync the environment variables to ACI!
+    const activeDeployment = await Deployment.findOne({
+      $or: [
+        { projectId: project._id },
+        { repositoryName: project.repositoryName, repositoryOwner: project.repositoryOwner }
+      ],
+      'infrastructure.provider': 'azure',
+      'infrastructure.targetType': 'azure',
+      status: { $in: ['success', 'running', 'building', 'deploying'] }
+    }).sort({ createdAt: -1 });
+
+    let aciSynced = false;
+    if (activeDeployment && activeDeployment.infrastructure?.aci?.containerGroupName) {
+      const groupName = activeDeployment.infrastructure.aci.containerGroupName;
+      const subId = process.env.AZURE_SUBSCRIPTION_ID;
+      const rg = activeDeployment.infrastructure.aci.resourceGroupName || process.env.AZURE_RESOURCE_GROUP || 'cloudops-reg';
+
+      // Convert project.environmentVariables array to object map
+      const envMap = {};
+      (project.environmentVariables || []).forEach((e) => {
+        if (e && e.key) envMap[e.key] = e.value;
+      });
+
+      // Synchronize to deployment record as well
+      activeDeployment.environmentVariables = project.environmentVariables;
+      await activeDeployment.save();
+
+      // Asynchronously trigger ACI container restart with new environment variables
+      triggerAciUpdate({
+        subscriptionId: subId,
+        resourceGroup: rg,
+        groupName,
+        envMap,
+        port: 80,
+      }).then((msg) => {
+        console.log(`[ACI Sync] Updated live container ${groupName}:`, msg);
+      }).catch((err) => {
+        console.error(`[ACI Sync Warning] Failed to update container ${groupName}:`, err.message);
+      });
+      aciSynced = true;
+    }
+
+    return res.status(200).json({ success: true, project, aciSynced });
   } catch (error) {
     console.error('Update project error:', error);
     return res.status(400).json({ success: false, error: error.message });

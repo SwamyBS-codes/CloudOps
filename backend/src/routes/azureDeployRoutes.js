@@ -1,8 +1,15 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const { runAzureDeployment } = require('../services/azureDeployService');
+const deploymentController = require('../controllers/deploymentController');
 
 const router = express.Router();
+
+// Lifecycle routes for Azure deployments
+router.post('/deployments/:id/cancel', deploymentController.cancelDeployment);
+router.post('/deployments/:id/stop', deploymentController.stopDeployment);
+router.post('/deployments/:id/start', deploymentController.startDeployment);
+router.delete('/deployments/:id', deploymentController.terminateDeployment);
 
 // POST /api/azure/deploy
 // Body: { repoUrl, appName, socketId }

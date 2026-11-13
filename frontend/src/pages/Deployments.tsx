@@ -88,7 +88,7 @@ const formatDuration = (ms?: number) => {
 
 export default function DeploymentsPage() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const deploymentId = searchParams.get('deploymentId') || '';
   const [connectedUserId, setConnectedUserId] = useState<string>('');
   const [deployments, setDeployments] = useState<DeploymentRecord[]>([]);
@@ -97,6 +97,16 @@ export default function DeploymentsPage() {
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+
+  useEffect(() => {
+    const view = searchParams.get('view');
+    const nextFilter = view === 'active' ? 'deploying'
+      : view === 'attention' ? 'attention'
+        : view === 'history' ? 'history'
+          : view === 'success' || view === 'failed' ? view
+            : 'all';
+    setStatusFilter(nextFilter);
+  }, [searchParams]);
 
   useEffect(() => {
     if (deploymentId) {
@@ -168,6 +178,8 @@ export default function DeploymentsPage() {
       const matchesStatus =
         statusFilter === 'all'
         || (statusFilter === 'deploying' && isDeploymentActive(deployment))
+        || (statusFilter === 'attention' && deployment.status === 'failed')
+        || (statusFilter === 'history' && !isDeploymentActive(deployment))
         || deployment.status === statusFilter;
       return matchesQuery && matchesStatus;
     });
@@ -261,18 +273,28 @@ export default function DeploymentsPage() {
           </div>
           <div className="flex flex-wrap items-center gap-1 border border-border bg-secondary/80 p-1">
             <Filter className="ml-2 h-4 w-4 text-muted-foreground" aria-hidden />
-            {['all', 'deploying', 'success', 'failed'].map((status) => (
+            {[
+              { key: 'all', label: 'All' },
+              { key: 'deploying', label: 'Active' },
+              { key: 'attention', label: 'Needs attention' },
+              { key: 'history', label: 'History' },
+              { key: 'success', label: 'Successful' },
+              { key: 'failed', label: 'Failed' },
+            ].map(({ key, label }) => (
               <button
-                key={status}
+                key={key}
                 type="button"
-                onClick={() => setStatusFilter(status)}
-                className={`rounded-md px-3 py-1.5 text-xs font-medium capitalize transition ${
-                  statusFilter === status
+                onClick={() => {
+                  setStatusFilter(key);
+                  setSearchParams({ view: key === 'deploying' ? 'active' : key });
+                }}
+                className={`px-3 py-1.5 text-xs font-medium transition ${
+                  statusFilter === key
                     ? 'bg-card text-foreground shadow-sm'
                     : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
-                {status}
+                {label}
               </button>
             ))}
           </div>

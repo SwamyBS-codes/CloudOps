@@ -57,8 +57,8 @@ function Routes() {
             <Route path="/deployments/:id" element={<DeploymentDetailPage />} />
             <Route path="/live-projects" element={<LiveProjectsPage />} />
             <Route path="/environment-variables" element={<EnvironmentVariablesPage />} />
+            <Route path="/deploy/:owner/:repo" element={<DeployProject />} />
           </Route>
-          <Route path="/deploy/:owner/:repo" element={<DeployProject />} />
         </Route>
 
         <Route path="/docs" element={<DocsPage />} />

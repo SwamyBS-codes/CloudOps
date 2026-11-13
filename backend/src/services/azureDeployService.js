@@ -17,6 +17,9 @@ const { getBuildDir } = require('../utils/pathResolver');
 const TEMP_ROOT = getBuildDir('azure');
 const DEFAULT_CONTAINER_PORT = 3000;
 
+// Registry of in-flight active deployments for cancellation
+const activeDeployments = new Map();
+
 // Azure settings — read from env at call time so .env is loaded first
 function azureConfig() {
   return {
@@ -37,17 +40,26 @@ function azureConfig() {
   };
 }
 
-function runCommand(command, args, options = {}, onData) {
+function runCommand(command, args, options = {}, onData, activeItem = null) {
   return new Promise((resolve, reject) => {
+    if (activeItem?.cancelled) {
+      return reject(new Error('Deployment cancelled by user'));
+    }
     // Always merge with full parent env so PATH/COMSPEC/SystemRoot are never lost
     const mergedEnv = { ...process.env, ...(options.env || {}) };
     const { env: _e, ...restOpts } = options;
 
     // Spawn directly without shell — works cross-platform and avoids cmd.exe lookup issues
     const child = spawn(command, args, { ...restOpts, env: mergedEnv, shell: false });
+    if (activeItem) {
+      activeItem.childProcesses.add(child);
+    }
     let output = '';
 
-    child.on('error', (err) => reject(err));
+    child.on('error', (err) => {
+      if (activeItem) activeItem.childProcesses.delete(child);
+      reject(err);
+    });
     child.stdout.on('data', (chunk) => {
       const text = maskSecrets(chunk.toString());
       output += text;
@@ -59,6 +71,10 @@ function runCommand(command, args, options = {}, onData) {
       if (onData) onData(text);
     });
     child.on('close', (code) => {
+      if (activeItem) activeItem.childProcesses.delete(child);
+      if (activeItem?.cancelled) {
+        return reject(new Error('Deployment cancelled by user'));
+      }
       if (code === 0) return resolve(output);
       reject(new Error(`${command} exited with code ${code}\n${output}`));
     });
@@ -143,10 +159,14 @@ async function ensureDockerfile(repoPath) {
   return { framework: detection.framework, appRelativePath, containerPort: detection.framework === 'static' ? 80 : DEFAULT_CONTAINER_PORT };
 }
 
-async function runAciViaPython({ deploymentId, appName, image, socketId, logLines, io, deployment, environmentVariables = {}, port = 80 }) {
+async function runAciViaPython({ deploymentId, appName, image, socketId, logLines, io, deployment, environmentVariables = {}, port = 80, activeItem = null }) {
   const cfg = azureConfig();
-  const groupName = `cg-${appName}-${deploymentId}`.slice(0, 63);
+  const groupName = activeItem?.containerGroupName || `cg-${appName}-${deploymentId}`.slice(0, 63);
   const logsBlobName = `${cfg.prefixBase}/${deploymentId}/aci.log.txt`;
+
+  if (activeItem) {
+    activeItem.containerGroupName = groupName;
+  }
 
   const env = {
     ...process.env,
@@ -184,7 +204,7 @@ async function runAciViaPython({ deploymentId, appName, image, socketId, logLine
     if (ipMatch) publicIp = ipMatch[1];
     const fqdnMatch = msg.match(/FQDN:\s+(\S+)/);
     if (fqdnMatch) fqdn = fqdnMatch[1];
-  });
+  }, activeItem);
   await aciLogQueue;
 
   const portSuffix = port && port !== 80 ? `:${port}` : '';
@@ -199,14 +219,15 @@ async function runAciViaPython({ deploymentId, appName, image, socketId, logLine
   };
 }
 
-async function uploadArtifacts({ deploymentId, summaryPath, logsPath }) {
+async function uploadArtifacts({ deploymentId, summaryPath, logsPath, activeItem = null }) {
   const cfg = azureConfig();
   const prefix = `${cfg.prefixBase}/${deploymentId}`;
   await runCommand(
     cfg.python,
     ['-m', 'orchestrator.core.cli_upload', '--container', cfg.blobContainer, '--prefix', prefix, '--summary-json', summaryPath, '--logs-json', logsPath],
     { cwd: cfg.orchestratorCwd },
-    () => {}
+    () => {},
+    activeItem
   );
 }
 
@@ -263,6 +284,16 @@ async function runAzureDeployment({
   const logLines = [];
   const git = simpleGit();
 
+  const groupName = `cg-${sanitizedName}-${deploymentId}`.slice(0, 63);
+  const activeItem = {
+    cancelled: false,
+    childProcesses: new Set(),
+    cloneDir,
+    artifactsDir,
+    containerGroupName: groupName,
+  };
+  activeDeployments.set(deploymentId, activeItem);
+
   // Create deployment record
   let deployment = null;
   const envEntries = Array.isArray(environmentVariables)
@@ -298,20 +329,25 @@ async function runAzureDeployment({
           repositoryName: sanitizedName,
         },
         aci: {
+          containerGroupName: groupName,
           resourceGroupName: cfg.resourceGroup,
           location: cfg.location,
         },
       },
     });
     await deployment.save();
+    activeDeployments.set(deployment._id.toString(), activeItem);
   } catch (dbErr) {
     console.error('[Azure] Failed to create deployment record:', dbErr);
+    activeDeployments.delete(deploymentId);
     throw dbErr;
   }
 
   onStarted?.(deployment);
 
   try {
+    if (activeItem.cancelled) throw new Error('Deployment cancelled by user');
+
     await emitLog(io, socketId, `[Azure] Starting deployment ${deploymentId}`, deployment, 'system');
 
     await emitLog(io, socketId, `[Azure] Cloning ${repoUrl}`, deployment, 'git');
@@ -321,7 +357,11 @@ async function runAzureDeployment({
     await fs.mkdir(cloneDir, { recursive: true });
     await fs.mkdir(artifactsDir, { recursive: true });
 
+    if (activeItem.cancelled) throw new Error('Deployment cancelled by user');
+
     await git.clone(repoUrl, cloneDir);
+    if (activeItem.cancelled) throw new Error('Deployment cancelled by user');
+
     await emitLog(io, socketId, '[Azure] Repository cloned.', deployment, 'git', 'success');
     logLines.push(`[Azure] Cloned ${repoUrl}`);
 
@@ -337,12 +377,16 @@ async function runAzureDeployment({
     const fullImage = `${cfg.acrLoginServer}/${sanitizedName}:${deploymentId}`;
     await emitLog(io, socketId, `[Azure] Building image ${fullImage}...`, deployment, 'docker');
 
+    if (activeItem.cancelled) throw new Error('Deployment cancelled by user');
+
     let buildLogQueue = Promise.resolve();
     await runCommand('docker', ['build', '-t', fullImage, '.'], { cwd: cloneDir }, (line) => {
       buildLogQueue = buildLogQueue.then(() => emitLog(io, socketId, line, deployment, 'docker'));
       logLines.push(line);
-    });
+    }, activeItem);
     await buildLogQueue;
+
+    if (activeItem.cancelled) throw new Error('Deployment cancelled by user');
 
     if (deployment) {
       deployment.infrastructure = deployment.infrastructure || {};
@@ -360,9 +404,11 @@ async function runAzureDeployment({
       await runCommand('docker', ['login', cfg.acrLoginServer, '-u', cfg.acrUsername, '-p', cfg.acrPassword], {}, (line) => {
         loginLogQueue = loginLogQueue.then(() => emitLog(io, socketId, line, deployment, 'acr'));
         logLines.push(line);
-      });
+      }, activeItem);
       await loginLogQueue;
     }
+
+    if (activeItem.cancelled) throw new Error('Deployment cancelled by user');
 
     await emitLog(io, socketId, '[Azure] Pushing image to ACR...', deployment, 'acr');
 
@@ -370,10 +416,12 @@ async function runAzureDeployment({
     await runCommand('docker', ['push', fullImage], {}, (line) => {
       pushLogQueue = pushLogQueue.then(() => emitLog(io, socketId, line, deployment, 'acr'));
       logLines.push(line);
-    });
+    }, activeItem);
     await pushLogQueue;
 
     await emitLog(io, socketId, 'Image pushed to ACR successfully', deployment, 'acr', 'success');
+
+    if (activeItem.cancelled) throw new Error('Deployment cancelled by user');
 
     // Convert env array or object into standard key-value map for container injection
     const envMap = {};
@@ -397,7 +445,10 @@ async function runAzureDeployment({
       deployment,
       environmentVariables: envMap,
       port: containerPort,
+      activeItem,
     });
+
+    if (activeItem.cancelled) throw new Error('Deployment cancelled by user');
 
     const appUrl = aciResult.accessUrl || `http://${aciResult.publicIp}`;
     await emitLog(io, socketId, `[Azure] Container running at: ${appUrl}`, deployment, 'aci', 'success');
@@ -432,7 +483,7 @@ async function runAzureDeployment({
 
     await emitLog(io, socketId, '[Azure] Uploading artifacts to Azure Blob...', deployment, 'system');
 
-    await uploadArtifacts({ deploymentId, summaryPath, logsPath });
+    await uploadArtifacts({ deploymentId, summaryPath, logsPath, activeItem });
 
     await emitLog(io, socketId, `[Azure] Deployment complete! App URL: ${appUrl}`, deployment, 'system', 'success');
     if (deployment) {
@@ -446,6 +497,22 @@ async function runAzureDeployment({
       });
     }
   } catch (error) {
+    if (activeItem?.cancelled || (error?.message && error.message.includes('cancelled'))) {
+      await emitLog(io, socketId, '[Azure] Deployment cancelled by user.', deployment, 'system', 'warning');
+      if (deployment) {
+        deployment.status = 'cancelled';
+        deployment.phase = 'complete';
+        deployment.completedAt = new Date();
+        await deployment.save().catch(err => console.error('[Azure] Failed to save cancelled state:', err));
+      }
+      if (io && socketId) {
+        io.to(socketId).emit('deploy:cancelled', { 
+          deploymentId: deployment?._id?.toString() || deploymentId,
+        });
+      }
+      return;
+    }
+
     const msg = error?.message || String(error);
     await emitLog(io, socketId, `[Azure] Deployment failed: ${msg}`, deployment, 'system', 'error');
     if (deployment) {
@@ -463,7 +530,158 @@ async function runAzureDeployment({
     }
   } finally {
     await safeRemove(artifactsDir).catch(() => {});
+    activeDeployments.delete(deploymentId);
+    if (deployment?._id) {
+      activeDeployments.delete(deployment._id.toString());
+    }
   }
 }
 
-module.exports = { runAzureDeployment };
+/**
+ * Manage Azure ACI Container Group lifecycle via orchestrator.core.aci_lifecycle
+ */
+async function manageAciLifecycle({ action, groupName }) {
+  const cfg = azureConfig();
+  const subscriptionId = process.env.AZURE_SUBSCRIPTION_ID;
+  if (!subscriptionId) throw new Error('AZURE_SUBSCRIPTION_ID is missing from environment');
+  const rg = cfg.resourceGroup;
+
+  const resultStr = await runCommand(
+    cfg.python,
+    [
+      '-m',
+      'orchestrator.core.aci_lifecycle',
+      '--action', action,
+      '--subscription-id', subscriptionId,
+      '--resource-group', rg,
+      '--group-name', groupName,
+    ],
+    { cwd: cfg.orchestratorCwd }
+  );
+
+  try {
+    const lines = resultStr.trim().split('\n');
+    return JSON.parse(lines[lines.length - 1]);
+  } catch (_e) {
+    return { action, group_name: groupName, status: 'done' };
+  }
+}
+
+async function cancelAzureDeployment(deploymentId, io) {
+  const deploymentKey = String(deploymentId);
+  const activeItem = activeDeployments.get(deploymentKey);
+
+  const deployment = await Deployment.findOne({
+    $or: [{ _id: deploymentId.match(/^[0-9a-fA-F]{24}$/) ? deploymentId : null }, { deploymentId }],
+  });
+
+  if (activeItem) {
+    activeItem.cancelled = true;
+    for (const child of activeItem.childProcesses) {
+      try { child.kill('SIGKILL'); } catch (_) {}
+    }
+    if (activeItem.containerGroupName) {
+      manageAciLifecycle({ action: 'delete', groupName: activeItem.containerGroupName }).catch(() => {});
+    }
+    if (activeItem.cloneDir) safeRemove(activeItem.cloneDir).catch(() => {});
+    if (activeItem.artifactsDir) safeRemove(activeItem.artifactsDir).catch(() => {});
+    activeDeployments.delete(deploymentKey);
+  }
+
+  if (deployment) {
+    const groupName = deployment.infrastructure?.aci?.containerGroupName;
+    if (groupName && (!activeItem || !activeItem.containerGroupName)) {
+      manageAciLifecycle({ action: 'delete', groupName }).catch(() => {});
+    }
+    deployment.status = 'cancelled';
+    deployment.phase = 'complete';
+    deployment.completedAt = new Date();
+    await deployment.save();
+
+    await emitLog(io, null, '[Azure] Deployment cancelled by user.', deployment, 'system', 'warning');
+    io?.to(`deployment:${deployment._id}`).emit('deployment:cancelled', { deploymentId: deployment._id });
+    return { success: true, status: 'cancelled' };
+  }
+
+  return { success: true, status: 'cancelled' };
+}
+
+async function stopAzureDeployment(deploymentId, io) {
+  const deployment = await Deployment.findOne({
+    $or: [{ _id: deploymentId.match(/^[0-9a-fA-F]{24}$/) ? deploymentId : null }, { deploymentId }],
+  });
+  if (!deployment) throw new Error('Deployment not found');
+
+  const groupName = deployment.infrastructure?.aci?.containerGroupName || deployment.metadata?.containerName;
+  if (!groupName) throw new Error('No Azure Container Group found for this deployment');
+
+  await emitLog(io, null, `[Azure] Suspending container group ${groupName}...`, deployment, 'aci');
+  const result = await manageAciLifecycle({ action: 'stop', groupName });
+
+  deployment.status = 'stopped';
+  if (deployment.infrastructure?.aci) {
+    deployment.infrastructure.aci.status = 'stopped';
+  }
+  await deployment.save();
+
+  await emitLog(io, null, `[Azure] Container group ${groupName} suspended. Compute billing paused.`, deployment, 'aci', 'success');
+  io?.to(`deployment:${deployment._id}`).emit('deployment:stopped', { deploymentId: deployment._id, status: 'stopped' });
+  return { success: true, status: 'stopped', groupName, result };
+}
+
+async function startAzureDeployment(deploymentId, io) {
+  const deployment = await Deployment.findOne({
+    $or: [{ _id: deploymentId.match(/^[0-9a-fA-F]{24}$/) ? deploymentId : null }, { deploymentId }],
+  });
+  if (!deployment) throw new Error('Deployment not found');
+
+  const groupName = deployment.infrastructure?.aci?.containerGroupName || deployment.metadata?.containerName;
+  if (!groupName) throw new Error('No Azure Container Group found for this deployment');
+
+  await emitLog(io, null, `[Azure] Resuming container group ${groupName}...`, deployment, 'aci');
+  const result = await manageAciLifecycle({ action: 'start', groupName });
+
+  deployment.status = 'success';
+  if (deployment.infrastructure?.aci) {
+    deployment.infrastructure.aci.status = 'running';
+  }
+  await deployment.save();
+
+  await emitLog(io, null, `[Azure] Container group ${groupName} resumed and running.`, deployment, 'aci', 'success');
+  io?.to(`deployment:${deployment._id}`).emit('deployment:started', { deploymentId: deployment._id, status: 'running' });
+  return { success: true, status: 'running', groupName, result };
+}
+
+async function deleteAzureDeployment(deploymentId, io) {
+  const deployment = await Deployment.findOne({
+    $or: [{ _id: deploymentId.match(/^[0-9a-fA-F]{24}$/) ? deploymentId : null }, { deploymentId }],
+  });
+  if (!deployment) throw new Error('Deployment not found');
+
+  const groupName = deployment.infrastructure?.aci?.containerGroupName || deployment.metadata?.containerName;
+  if (groupName) {
+    await emitLog(io, null, `[Azure] Terminating container group ${groupName}...`, deployment, 'aci');
+    await manageAciLifecycle({ action: 'delete', groupName });
+  }
+
+  deployment.status = 'closed';
+  if (deployment.infrastructure?.aci) {
+    deployment.infrastructure.aci.status = 'deleted';
+  }
+  deployment.publicUrl = null;
+  deployment.domainUrl = null;
+  await deployment.save();
+
+  await emitLog(io, null, `[Azure] Deployment terminated and container group deleted.`, deployment, 'aci', 'success');
+  io?.to(`deployment:${deployment._id}`).emit('deployment:terminated', { deploymentId: deployment._id, status: 'closed' });
+  return { success: true, status: 'closed', groupName };
+}
+
+module.exports = {
+  runAzureDeployment,
+  cancelAzureDeployment,
+  stopAzureDeployment,
+  startAzureDeployment,
+  deleteAzureDeployment,
+  manageAciLifecycle,
+};

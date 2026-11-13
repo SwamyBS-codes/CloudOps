@@ -7,6 +7,10 @@ const {
     getDeploymentById,
     getDeploymentLogs,
     getDeploymentStatus,
+    cancelDeployment,
+    stopDeployment,
+    startDeployment,
+    deleteDeployment,
     getAnalyticsDashboard,
     getAnalyticsDeployments,
     getAnalyticsCosts,
@@ -26,6 +30,10 @@ router.post('/deployments/create', createDeployment);
 router.get('/deployments/:id', getDeploymentById);
 router.get('/deployments/:id/logs', getDeploymentLogs);
 router.get('/deployments/:id/status', getDeploymentStatus);
+router.post('/deployments/:id/cancel', cancelDeployment);
+router.post('/deployments/:id/stop', stopDeployment);
+router.post('/deployments/:id/start', startDeployment);
+router.delete('/deployments/:id', deleteDeployment);
 
 router.get('/analytics/dashboard', authMiddleware, getAnalyticsDashboard);
 router.get('/analytics/deployments', authMiddleware, getAnalyticsDeployments);

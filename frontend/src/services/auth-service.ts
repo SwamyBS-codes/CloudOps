@@ -54,6 +54,18 @@ export const deploymentService = {
   cancel: (id: string) =>
     apiClient.post(generateEndpoint(ENDPOINTS.DEPLOYMENTS.CANCEL, { id })),
 
+  stop: (id: string) =>
+    apiClient.post(`/api/deployments/${encodeURIComponent(id)}/stop`),
+
+  start: (id: string) =>
+    apiClient.post(`/api/deployments/${encodeURIComponent(id)}/start`),
+
+  restart: (id: string) =>
+    apiClient.post(`/api/deployments/${encodeURIComponent(id)}/restart`),
+
+  terminateAzureDeployment: (id: string) =>
+    apiClient.delete(generateEndpoint(ENDPOINTS.DEPLOYMENTS.DELETE, { id })),
+
   rollback: (id: string) =>
     apiClient.post(generateEndpoint(ENDPOINTS.DEPLOYMENTS.ROLLBACK, { id })),
   // Terminate an AWS deployment (deletes EC2 instance and optionally ECR/S3)
